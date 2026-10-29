@@ -222,34 +222,48 @@ fn set_pin(state: State<App>, pin: Option<String>) -> CommandResult<()> {
 /// doubling up to [`MAX_WAIT_SECS`]. The recovery key always works.
 #[tauri::command]
 fn unlock_pin(state: State<App>, pin: String) -> CommandResult<bool> {
-    let mut inner = state.lock_inner()?;
-    if let Some(t) = inner.wait_until
-        && t > now()
-    {
-        return Err(format!(
-            "Too many wrong PINs. Try again in {} seconds.",
-            (t - now()).get_seconds() + 1
-        ));
-    }
-    let hash = inner
-        .store
-        .as_ref()
-        .and_then(|s| get::<String>(s, "lock.pin"))
-        .ok_or("No PIN is set.")?;
-    if keys::pin_check(&pin, &hash) {
-        inner.locked = false;
-        inner.wrong_pins = 0;
-        inner.wait_until = None;
-        drop(inner);
+    let ok = state.lock_inner()?.try_pin(&pin, now())?;
+    if ok {
         state.maintain();
-        return Ok(true);
     }
-    inner.wrong_pins += 1;
-    if inner.wrong_pins >= FREE_TRIES {
-        let secs = (30i64 << (inner.wrong_pins - FREE_TRIES).min(10)).min(MAX_WAIT_SECS);
-        inner.wait_until = Some(now() + SignedDuration::from_secs(secs));
+    Ok(ok)
+}
+
+/// Wait before the next PIN try after `wrong` wrong ones in a row: none for
+/// the first [`FREE_TRIES`], then 30 s doubling up to [`MAX_WAIT_SECS`].
+fn pin_wait(wrong: u32) -> Option<SignedDuration> {
+    let extra = wrong.checked_sub(FREE_TRIES)?;
+    Some(SignedDuration::from_secs(
+        (30i64 << extra.min(10)).min(MAX_WAIT_SECS),
+    ))
+}
+
+impl Inner {
+    /// Check a PIN, keeping count of wrong ones. Unlocks on a match.
+    fn try_pin(&mut self, pin: &str, now: Timestamp) -> CommandResult<bool> {
+        if let Some(t) = self.wait_until
+            && t > now
+        {
+            return Err(format!(
+                "Too many wrong PINs. Try again in {} seconds.",
+                (t - now).get_seconds() + 1
+            ));
+        }
+        let hash = self
+            .store
+            .as_ref()
+            .and_then(|s| get::<String>(s, "lock.pin"))
+            .ok_or("No PIN is set.")?;
+        if keys::pin_check(pin, &hash) {
+            self.locked = false;
+            self.wrong_pins = 0;
+            self.wait_until = None;
+            return Ok(true);
+        }
+        self.wrong_pins += 1;
+        self.wait_until = pin_wait(self.wrong_pins).map(|d| now + d);
+        Ok(false)
     }
-    Ok(false)
 }
 
 /// Unlock with fingerprint or face (phones only).
@@ -550,4 +564,98 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Arogya Swasthya");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_pin(pin: &str) -> Inner {
+        let store = Store::memory().unwrap();
+        store
+            .set_setting("lock.pin", &keys::pin_hash(pin).unwrap())
+            .unwrap();
+        let locked = lock_on(&store);
+        Inner {
+            store: Some(store),
+            locked,
+            ..Inner::default()
+        }
+    }
+
+    #[test]
+    fn waits_grow_after_five_wrong_pins_and_stop_at_fifteen_minutes() {
+        assert_eq!(pin_wait(4), None);
+        assert_eq!(pin_wait(5), Some(SignedDuration::from_secs(30)));
+        assert_eq!(pin_wait(6), Some(SignedDuration::from_secs(60)));
+        assert_eq!(pin_wait(9), Some(SignedDuration::from_secs(480)));
+        assert_eq!(pin_wait(10), Some(SignedDuration::from_secs(MAX_WAIT_SECS)));
+        assert_eq!(
+            pin_wait(500),
+            Some(SignedDuration::from_secs(MAX_WAIT_SECS))
+        );
+    }
+
+    #[test]
+    fn right_pin_unlocks_and_wrong_ones_lock_out_for_a_while() {
+        let t0: Timestamp = "2026-10-29T10:00:00Z".parse().unwrap();
+        let mut inner = with_pin("2468");
+        assert!(inner.locked);
+        for _ in 0..4 {
+            assert_eq!(inner.try_pin("1111", t0), Ok(false));
+        }
+        assert_eq!(inner.wait_until, None);
+        assert_eq!(inner.try_pin("1111", t0), Ok(false));
+        // Even the right PIN waits until the time is up.
+        let err = inner
+            .try_pin("2468", t0 + SignedDuration::from_secs(10))
+            .unwrap_err();
+        assert!(err.contains("Try again in 21 seconds"), "{err}");
+        assert!(inner.locked);
+        assert_eq!(
+            inner.try_pin("2468", t0 + SignedDuration::from_secs(30)),
+            Ok(true)
+        );
+        assert!(!inner.locked);
+        assert_eq!((inner.wrong_pins, inner.wait_until), (0, None));
+    }
+
+    #[test]
+    fn removed_pin_and_biometric_switch_the_lock_off() {
+        let inner = with_pin("2468");
+        let store = inner.store.as_ref().unwrap();
+        store.set_setting("lock.pin", &None::<String>).unwrap();
+        assert!(!lock_on(store));
+        store.set_setting("lock.biometric", &true).unwrap();
+        assert!(lock_on(store));
+        store.set_setting("lock.biometric", &false).unwrap();
+        assert!(!lock_on(store));
+    }
+
+    #[test]
+    fn no_pin_set_is_an_error_not_an_unlock() {
+        let mut inner = Inner {
+            store: Some(Store::memory().unwrap()),
+            locked: true,
+            ..Inner::default()
+        };
+        assert_eq!(
+            inner.try_pin("0000", Timestamp::now()),
+            Err("No PIN is set.".into())
+        );
+        assert!(inner.locked);
+    }
+
+    #[test]
+    fn screens_can_only_touch_their_own_settings() {
+        assert!(ui_setting("places").is_ok());
+        for key in [
+            "lock.pin",
+            "lock.biometric",
+            "backup.folder",
+            "recovery.saved",
+        ] {
+            assert!(ui_setting(key).is_err(), "{key}");
+        }
+    }
 }

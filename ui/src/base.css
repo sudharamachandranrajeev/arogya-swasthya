@@ -9,6 +9,8 @@
 
 html, body { height: 100%; }
 body {
+  /* Phones draw under the status bar; keep content clear of it. */
+  padding-top: env(safe-area-inset-top);
   background: var(--page-bg);
   background-attachment: fixed;
   color: var(--c-ink);
