@@ -1,77 +1,136 @@
 <script lang="ts">
-  import { Card, Shell, ThemeEditor, ThemePicker, ui, type NavItem } from '@swasthya/ui'
+  import { Card, Segmented, Shell, ThemeEditor, ThemePicker, ui, type NavItem } from '@swasthya/ui'
   import Activity from '@lucide/svelte/icons/activity'
   import Camera from '@lucide/svelte/icons/camera'
   import Dumbbell from '@lucide/svelte/icons/dumbbell'
   import FileText from '@lucide/svelte/icons/file-text'
+  import History from '@lucide/svelte/icons/history'
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard'
   import ListChecks from '@lucide/svelte/icons/list-checks'
   import MapPin from '@lucide/svelte/icons/map-pin'
   import Palette from '@lucide/svelte/icons/palette'
   import PersonStanding from '@lucide/svelte/icons/person-standing'
   import PillIcon from '@lucide/svelte/icons/pill'
-  import Overview from './lib/Overview.svelte'
+  import SettingsIcon from '@lucide/svelte/icons/settings'
+  import Home from './lib/Home.svelte'
   import Lock from './lib/Lock.svelte'
-  import { api, inApp, type Status } from './lib/api'
+  import { allergy, condition, medication, procedure, result, vaccine } from './lib/model/fhir.ts'
+  import { emergencyLine } from './lib/model/places.ts'
+  import RecordList from './lib/RecordList.svelte'
+  import { session } from './lib/session.svelte.ts'
+  import Settings from './lib/Settings.svelte'
+  import Timeline from './lib/Timeline.svelte'
+  import Toast from './lib/Toast.svelte'
+  import Wizard from './lib/Wizard.svelte'
 
   const items: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'body', label: 'Body', icon: PersonStanding },
     { id: 'records', label: 'Records', icon: FileText },
-    { id: 'care', label: 'Find care', icon: MapPin },
-    { id: 'results', label: 'Results', icon: Activity },
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
+    { id: 'results', label: 'Results', icon: Activity },
+    { id: 'timeline', label: 'Timeline', icon: History },
+    { id: 'body', label: 'Body', icon: PersonStanding },
+    { id: 'care', label: 'Find care', icon: MapPin },
     { id: 'exercise', label: 'Exercise', icon: Dumbbell },
     { id: 'photos', label: 'Photos', icon: Camera },
     { id: 'plan', label: 'Plan', icon: ListChecks },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon },
     { id: 'appearance', label: 'Appearance', icon: Palette },
   ]
+  const later: Record<string, string> = {
+    body: 'A 3D body that lights up where your conditions, procedures and photos belong.',
+    care: 'Finding care near you, with every source checked and shown.',
+    exercise: 'Exercise plans that respect your injuries and conditions.',
+    photos: 'Body photo series with consistent light and angle checks.',
+    plan: 'A care plan for life: screenings, vaccines and follow-ups.',
+  }
+
+  const recordKinds = [condition, allergy, procedure, vaccine]
+  let recordKind = $state(condition.type)
 
   const fromHash = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'overview'
   let page = $state(fromHash())
   addEventListener('hashchange', () => (page = fromHash()))
   const label = $derived(items.find((i) => i.id === page)?.label ?? 'Overview')
 
-  // In the app, nothing shows until the data is open and the app lock is off.
-  let status = $state<Status | null>(null)
-  const refresh = async () => (status = await api.status())
-  if (inApp) refresh()
-  const gated = $derived(inApp && (!status || !status.open || status.locked))
+  session.load().catch((e) => session.fail(e))
+  const status = $derived(session.status)
 </script>
 
-{#if gated}
-  {#if status}<Lock {status} onchange={refresh} />{/if}
+{#if !status}
+  <!-- Loading: a blank page avoids a flash of the wrong screen. -->
+{:else if !status.open || status.locked}
+  <Lock {status} onchange={() => session.load()} />
+{:else if !session.ready}
+  <Wizard />
 {:else}
-
-<Shell brand="Arogya Swasthya" {items} current={page} onnavigate={(id) => (location.hash = `/${id}`)}>
-  {#snippet footer()}Stored on this device · encrypted<br />Theme: {ui.current.label}{ui.calm ? ' · calm' : ''}{/snippet}
-  {#key page}
-    <div class="page">
-      {#if page === 'overview'}
-        <Overview />
-      {:else if page === 'appearance'}
-        <h1>Appearance</h1>
-        <p class="lead">One choice changes every screen. Make your own theme below; it is checked so text stays easy to read.</p>
-        <Card title="Theme" explain="Pick a look for the whole app. Light or dark and motion apply to every theme.">
-          <ThemePicker />
-        </Card>
-        <div class="gap"></div>
-        <Card title="Make your own" explain="Start from any theme, change colours, fonts and shapes, and see the result live before saving.">
-          <ThemeEditor />
-        </Card>
-      {:else}
-        <h1>{label}</h1>
-        <p class="lead">Coming in a later phase.</p>
+  <Shell brand="Arogya Swasthya" {items} current={page} onnavigate={(id) => (location.hash = `/${id}`)}>
+    {#snippet footer()}
+      {#if session.people.length > 1}
+        <label class="who">Showing
+          <select value={session.current} onchange={(e) => session.choose(e.currentTarget.value)}>
+            {#each session.people as p (p.id)}<option value={p.id}>{(p.name as { text?: string }[] | undefined)?.[0]?.text ?? 'Unnamed'}</option>{/each}
+          </select>
+        </label>
       {/if}
-    </div>
-  {/key}
-</Shell>
+      <span class="sos">{emergencyLine(session.places)}</span><br />
+      Stored on this device · encrypted{ui.calm ? ' · calm' : ''}
+    {/snippet}
+    {#key page}
+      <div class="page">
+        {#if !session.current && page !== 'settings' && page !== 'appearance'}
+          <h1>Nobody here yet</h1>
+          <p class="lead">Every record belongs to a person. Add yourself, or someone you look after, to start.</p>
+          <p><a href="#/settings">Open Settings → People</a>, or restore someone from the trash there.</p>
+        {:else if page === 'overview'}
+          <Home />
+        {:else if page === 'records'}
+          <h1>Records</h1>
+          <p class="lead">{session.personName}'s conditions, allergies, procedures and vaccines.</p>
+          <div class="tabs">
+            <Segmented label="Kind of record" options={recordKinds.map((k) => ({ value: k.type, label: k.title }))} value={recordKind} onchange={(v) => (recordKind = v)} />
+          </div>
+          {#key recordKind}<RecordList kind={recordKinds.find((k) => k.type === recordKind)!} />{/key}
+        {:else if page === 'medicines'}
+          <h1>Medicines</h1>
+          <p class="lead">What {session.personName} takes, or has taken. Reminders arrive in a later version.</p>
+          <RecordList kind={medication} />
+        {:else if page === 'results'}
+          <h1>Results</h1>
+          <p class="lead">Test results with the lab's normal range. Outside the range is not always a problem: ask the person who ordered the test.</p>
+          <RecordList kind={result} />
+        {:else if page === 'timeline'}
+          <h1>Timeline</h1>
+          <p class="lead">Everything in {session.personName}'s record, newest first.</p>
+          <Card><Timeline /></Card>
+        {:else if page === 'settings'}
+          <Settings />
+        {:else if page === 'appearance'}
+          <h1>Appearance</h1>
+          <p class="lead">One choice changes every screen. Make your own theme below; it is checked so text stays easy to read.</p>
+          <Card title="Theme" explain="Pick a look for the whole app. Light or dark and motion apply to every theme.">
+            <ThemePicker />
+          </Card>
+          <div class="gap"></div>
+          <Card title="Make your own" explain="Start from any theme, change colours, fonts and shapes, and see the result live before saving.">
+            <ThemeEditor />
+          </Card>
+        {:else}
+          <h1>{label}</h1>
+          <p class="lead">{later[page] ?? ''} Coming in a later version.</p>
+        {/if}
+      </div>
+    {/key}
+  </Shell>
 {/if}
+<Toast />
 
 <style>
   .page { animation: enter var(--dur-slow) var(--ease); }
   @keyframes enter { from { opacity: 0; translate: 0 8px; } }
-  h1 { font-size: var(--text-display); font-weight: var(--weight-display); }
-  .lead { color: var(--c-muted); margin: 4px 0 20px; max-width: 70ch; }
   .gap { height: 18px; }
+  .tabs { margin-bottom: 16px; overflow-x: auto; }
+  .who { display: grid; gap: 4px; margin-bottom: 8px; }
+  .who select { font: inherit; padding: 4px 6px; border-radius: var(--r-control); border: 1px solid var(--c-line); background: var(--c-panel); color: var(--c-ink); }
+  .sos { font-weight: 600; }
 </style>

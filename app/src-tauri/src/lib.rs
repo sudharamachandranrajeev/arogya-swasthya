@@ -364,6 +364,63 @@ fn backup_now(state: State<App>) -> CommandResult<String> {
     Ok(name)
 }
 
+/// Write a backup to a file the user picked in the save dialog. On Android
+/// that is a content URI, which only the fs plugin can open.
+#[tauri::command]
+fn save_backup_to(app: AppHandle, state: State<App>, target: String) -> CommandResult<()> {
+    let tmp = state.dir.join("save-backup.partial");
+    let _ = std::fs::remove_file(&tmp);
+    {
+        let inner = state.lock_inner()?;
+        let (Some(store), Some(key), false) = (&inner.store, &inner.key, inner.locked) else {
+            return Err("Arogya Swasthya is locked.".into());
+        };
+        store.export(&tmp, key).map_err(err)?;
+    }
+    let copied = copy_to(&app, &tmp, &target);
+    let _ = std::fs::remove_file(&tmp);
+    copied.map_err(|e| format!("Could not save the backup: {e}"))
+}
+
+#[cfg(mobile)]
+fn copy_to(app: &AppHandle, from: &Path, target: &str) -> std::io::Result<()> {
+    use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
+    let path: FilePath = target.parse().map_err(std::io::Error::other)?;
+    let mut opts = OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    let mut out = app.fs().open(path, opts)?;
+    std::io::copy(&mut std::fs::File::open(from)?, &mut out)?;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn copy_to(_app: &AppHandle, from: &Path, target: &str) -> std::io::Result<()> {
+    std::fs::copy(from, target).map(|_| ())
+}
+
+/// Settings the UI may read and write. Everything else (PIN, backup folder,
+/// recovery state) has its own command with its own checks.
+const UI_SETTINGS: &[&str] = &["places", "terms.accepted", "setup.done", "person.current"];
+
+fn ui_setting(key: &str) -> CommandResult<()> {
+    UI_SETTINGS
+        .contains(&key)
+        .then_some(())
+        .ok_or_else(|| format!("{key} is not a setting the screens can change."))
+}
+
+#[tauri::command]
+fn get_setting(state: State<App>, key: String) -> CommandResult<Option<Value>> {
+    ui_setting(&key)?;
+    state.with(|s| Ok(get::<Value>(s, &key)))
+}
+
+#[tauri::command]
+fn put_setting(state: State<App>, key: String, value: Value) -> CommandResult<()> {
+    ui_setting(&key)?;
+    state.with(|s| s.set_setting(&key, &value))
+}
+
 #[tauri::command]
 fn people(state: State<App>) -> CommandResult<Vec<Value>> {
     state.with(|s| s.people())
@@ -436,18 +493,21 @@ pub fn run() {
     }
     #[cfg(mobile)]
     {
-        builder = builder.plugin(tauri_plugin_biometric::init());
+        builder = builder
+            .plugin(tauri_plugin_biometric::init())
+            .plugin(tauri_plugin_fs::init());
     }
     builder
         .plugin(tauri_plugin_swasthya_device::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            // The database is encrypted; keep the folder private too.
+            std::fs::create_dir_all(dir.join(BACKUP_DIR))?;
+            // The database and backups are encrypted; keep their folders private too.
             #[cfg(unix)]
-            {
+            for d in [dir.clone(), dir.join(BACKUP_DIR)] {
                 use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+                let _ = std::fs::set_permissions(d, std::fs::Permissions::from_mode(0o700));
             }
             app.manage(App {
                 inner: Mutex::new(Inner::default()),
@@ -475,6 +535,9 @@ pub fn run() {
             backups,
             set_backup_folder,
             backup_now,
+            save_backup_to,
+            get_setting,
+            put_setting,
             people,
             records,
             timeline,

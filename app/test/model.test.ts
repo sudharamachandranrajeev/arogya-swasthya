@@ -1,0 +1,102 @@
+// Form <-> FHIR mapping, result ranges, places and terms. Synthetic data only.
+//   node --test 'app/test/*.test.ts'
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { allergy, check, classify, condition, fromFhir, kinds, medication, result, setPath, toFhir, vaccine } from '../src/lib/model/fhir.ts'
+import { addHome, country, emergencyLine, emptyPlaces, removeHome } from '../src/lib/model/places.ts'
+import { terms } from '../src/lib/model/terms.ts'
+
+test('a condition round-trips through the form and points at its person', () => {
+  const r = toFhir(condition, { name: 'Asthma', status: 'active', onset: '2015', site: 'Lungs', note: '' }, 'p1')
+  assert.equal(r.resourceType, 'Condition')
+  assert.deepEqual(r.subject, { reference: 'Patient/p1' })
+  assert.equal((r.clinicalStatus as any).coding[0].system, 'http://terminology.hl7.org/CodeSystem/condition-clinical')
+  assert.equal(r.note, undefined)
+  assert.deepEqual(fromFhir(condition, r), { name: 'Asthma', status: 'active', onset: '2015', site: 'Lungs', note: '' })
+})
+
+test('editing keeps fields the form does not show, and clears emptied ones', () => {
+  const old = { resourceType: 'MedicationStatement', id: 'm1', subject: { reference: 'Patient/p1' }, status: 'active',
+    medicationCodeableConcept: { text: 'Metformin 500 mg', coding: [{ system: 'x', code: '1' }] },
+    dosage: [{ text: 'twice a day' }], informationSource: { display: 'GP letter' } }
+  const r = toFhir(medication, { ...fromFhir(medication, old), dose: '' }, 'p1', old)
+  assert.equal(r.id, 'm1')
+  assert.deepEqual(r.informationSource, { display: 'GP letter' })
+  assert.deepEqual((r.medicationCodeableConcept as any).coding, [{ system: 'x', code: '1' }])
+  assert.equal(r.dosage, undefined)
+  assert.equal(old.dosage[0].text, 'twice a day', 'the stored copy is not changed')
+})
+
+test('allergies and vaccines carry their fixed fields and patient reference', () => {
+  const a = toFhir(allergy, { name: 'Penicillin', category: 'medication', criticality: 'high' }, 'p1')
+  assert.deepEqual(a.patient, { reference: 'Patient/p1' })
+  assert.deepEqual(a.category, ['medication'])
+  assert.equal((a.clinicalStatus as any).coding[0].code, 'active')
+  assert.equal(allergy.summary(a).sub, 'Serious')
+  const v = toFhir(vaccine, { name: 'Influenza', date: '2025-10-02', dose: '1' }, 'p1')
+  assert.equal(v.status, 'completed')
+  assert.equal(vaccine.summary(v).sub, 'Dose 1')
+})
+
+test('results: numbers become quantities, words stay words, ranges take the unit', () => {
+  const n = toFhir(result, { name: 'HbA1c', value: '52', unit: 'mmol/mol', low: '20', high: '41', date: '2025-06-01' }, 'p1')
+  assert.deepEqual(n.valueQuantity, { value: 52, unit: 'mmol/mol' })
+  assert.deepEqual((n.referenceRange as any)[0], { low: { value: 20, unit: 'mmol/mol' }, high: { value: 41, unit: 'mmol/mol' } })
+  assert.equal(result.summary(n).sub, '52 mmol/mol · Above range')
+  assert.equal(fromFhir(result, n).value, '52')
+  const w = toFhir(result, { name: 'COVID-19 test', value: 'negative', date: '2025-06-01' }, 'p1', n)
+  assert.equal(w.valueString, 'negative')
+  assert.equal(w.valueQuantity, undefined)
+})
+
+test('classify needs a number and a bound', () => {
+  assert.equal(classify('3', '4', '6'), 'low')
+  assert.equal(classify('5', '4', '6'), 'in')
+  assert.equal(classify('7', '', '6'), 'high')
+  assert.equal(classify('5'), null)
+  assert.equal(classify('positive', '1', '2'), null)
+  assert.equal(classify('', '1', '2'), null)
+})
+
+test('check explains missing, malformed and future values', () => {
+  assert.deepEqual(check(vaccine, { name: 'MMR', date: '2020-01-05' }), [])
+  assert.match(check(vaccine, { name: '' }).join(' '), /Vaccine is needed.*Date is needed/)
+  assert.match(check(vaccine, { name: 'MMR', date: '5/1/2020' }).join(), /2024-03-15/)
+  assert.match(check(vaccine, { name: 'MMR', date: '2999' }).join(), /future/)
+  assert.match(check(result, { name: 'x', value: '1', date: '2020', low: 'abc' }).join(), /number/)
+})
+
+test('every kind has a summary and a required first field', () => {
+  for (const k of kinds) {
+    assert.ok(k.fields[0].required, k.type)
+    assert.equal(typeof k.summary(toFhir(k, { name: 'x' }, 'p')).title, 'string')
+  }
+})
+
+test('setPath removes containers it empties', () => {
+  const r: Record<string, unknown> = { a: [{ b: 1 }], keep: 1 }
+  setPath(r, 'a.0.b', undefined)
+  assert.deepEqual(r, { keep: 1 })
+})
+
+test('places: several homes, travel, own numbers', () => {
+  let p = addHome(addHome(emptyPlaces(), 'GB'), 'IN')
+  assert.deepEqual(p.homes, ['GB', 'IN'])
+  assert.equal(p.current, 'GB')
+  assert.equal(emergencyLine(p), 'United Kingdom: emergency 999 · urgent advice NHS 111')
+  p = { ...p, current: 'JP' }
+  assert.match(emergencyLine(p), /Japan: emergency 119/)
+  p = { ...p, current: 'LK' }
+  assert.equal(country(p, 'LK'), undefined)
+  assert.match(emergencyLine(p), /add your local emergency number/)
+  p = { ...p, custom: { LK: { name: 'Sri Lanka', emergency: '1990' } } }
+  assert.equal(emergencyLine(p), 'Sri Lanka: emergency 1990')
+  p = removeHome({ ...p, current: 'GB' }, 'GB')
+  assert.deepEqual([p.homes, p.current], [['IN'], 'IN'])
+})
+
+test('terms name the emergency number of where the person is', () => {
+  const t = terms(addHome(emptyPlaces(), 'US'))
+  assert.ok(t.points.some((x) => x.includes('emergency 911')))
+  assert.ok(t.points.some((x) => /not a doctor/.test(x)))
+})

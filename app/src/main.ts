@@ -1,4 +1,5 @@
 import '@swasthya/ui/base.css'
+import './forms.css'
 import { mount } from 'svelte'
 import { ui } from '@swasthya/ui'
 import App from './App.svelte'

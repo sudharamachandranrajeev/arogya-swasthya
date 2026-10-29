@@ -1,7 +1,7 @@
 <script lang="ts">
   // Shown instead of the app while the data is closed or the app lock is on.
   import { Button, Card } from '@swasthya/ui'
-  import { api, message, type Status } from './api'
+  import { api, message, type Status } from './api.ts'
 
   let { status, onchange }: { status: Status; onchange: () => void } = $props()
 
