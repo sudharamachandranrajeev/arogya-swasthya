@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window: Arogya Swasthya's own commands only",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

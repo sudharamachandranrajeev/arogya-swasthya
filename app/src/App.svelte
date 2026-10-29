@@ -11,6 +11,8 @@
   import PersonStanding from '@lucide/svelte/icons/person-standing'
   import PillIcon from '@lucide/svelte/icons/pill'
   import Overview from './lib/Overview.svelte'
+  import Lock from './lib/Lock.svelte'
+  import { api, inApp, type Status } from './lib/api'
 
   const items: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -29,7 +31,17 @@
   let page = $state(fromHash())
   addEventListener('hashchange', () => (page = fromHash()))
   const label = $derived(items.find((i) => i.id === page)?.label ?? 'Overview')
+
+  // In the app, nothing shows until the data is open and the app lock is off.
+  let status = $state<Status | null>(null)
+  const refresh = async () => (status = await api.status())
+  if (inApp) refresh()
+  const gated = $derived(inApp && (!status || !status.open || status.locked))
 </script>
+
+{#if gated}
+  {#if status}<Lock {status} onchange={refresh} />{/if}
+{:else}
 
 <Shell brand="Arogya Swasthya" {items} current={page} onnavigate={(id) => (location.hash = `/${id}`)}>
   {#snippet footer()}Stored on this device · encrypted<br />Theme: {ui.current.label}{ui.calm ? ' · calm' : ''}{/snippet}
@@ -54,6 +66,7 @@
     </div>
   {/key}
 </Shell>
+{/if}
 
 <style>
   .page { animation: enter var(--dur-slow) var(--ease); }
