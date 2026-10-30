@@ -4,6 +4,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { clone, type Resource } from './model/fhir.ts'
+import type { ReportData } from './model/report.ts'
 
 export const inApp = '__TAURI_INTERNALS__' in globalThis
 
@@ -212,6 +213,8 @@ export interface Api {
   markDose(dose: Dose, status: 'taken' | 'skipped' | null): Promise<void>
   /** Reschedule reminders after medicines change. */
   refreshReminders(): Promise<void>
+  /** Lay out the doctor report as a PDF and save it at `target`. */
+  saveReport(data: ReportData, target: string): Promise<void>
 }
 
 const tauri: Api = {
@@ -263,6 +266,7 @@ const tauri: Api = {
   dosesToday: () => invoke('doses_today'),
   markDose: (d, status) => invoke('mark_dose', { med: d.med, date: d.date, time: d.time, status }),
   refreshReminders: () => invoke('refresh_reminders'),
+  saveReport: (data, target) => invoke('save_report', { data, target }),
   remove: (id) => invoke('delete_record', { id }),
   restore: (id) => invoke('restore_record', { id }),
   trash: () => invoke('trash'),
@@ -464,6 +468,7 @@ function memory(): Api {
       settings.set('reminders.log', log)
     },
     refreshReminders: async () => {},
+    saveReport: async () => void settings.set('report.saved', true),
   }
 }
 

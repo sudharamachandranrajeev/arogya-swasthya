@@ -393,7 +393,7 @@ export function classify(value: string, low?: string, high?: string): Band {
   return Number.isFinite(lo) || Number.isFinite(hi) ? 'in' : null
 }
 
-function resultValue(r: Resource) {
+export function resultValue(r: Resource) {
   const value = r.valueQuantity != null ? text(r, 'valueQuantity.value') : text(r, 'valueString')
   return { value, unit: text(r, 'valueQuantity.unit'), low: text(r, 'referenceRange.0.low.value'), high: text(r, 'referenceRange.0.high.value') }
 }

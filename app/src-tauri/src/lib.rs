@@ -6,6 +6,7 @@ mod data;
 mod docs;
 mod import;
 mod reminders;
+mod report;
 mod text;
 #[cfg(desktop)]
 mod transcribe;
@@ -541,6 +542,7 @@ pub fn run() {
             reminders::doses_today,
             reminders::mark_dose,
             reminders::refresh_reminders,
+            report::save_report,
             update::update_status,
             update::set_update_mode,
             update::open_page,

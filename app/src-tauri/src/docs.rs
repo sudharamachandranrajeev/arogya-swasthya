@@ -168,7 +168,7 @@ pub(crate) fn open_picked(
 }
 
 #[cfg(mobile)]
-fn create_target(app: &AppHandle, target: &str) -> std::io::Result<std::fs::File> {
+pub(crate) fn create_target(app: &AppHandle, target: &str) -> std::io::Result<std::fs::File> {
     use tauri_plugin_fs::{FsExt, OpenOptions};
     let path: FilePath = target.parse().map_err(std::io::Error::other)?;
     let mut opts = OpenOptions::new();
@@ -177,7 +177,7 @@ fn create_target(app: &AppHandle, target: &str) -> std::io::Result<std::fs::File
 }
 
 #[cfg(desktop)]
-fn create_target(_app: &AppHandle, target: &str) -> std::io::Result<std::fs::File> {
+pub(crate) fn create_target(_app: &AppHandle, target: &str) -> std::io::Result<std::fs::File> {
     std::fs::File::create(target)
 }
 

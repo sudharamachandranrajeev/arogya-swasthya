@@ -17,6 +17,7 @@
   import PersonStanding from '@lucide/svelte/icons/person-standing'
   import PillIcon from '@lucide/svelte/icons/pill'
   import SearchIcon from '@lucide/svelte/icons/search'
+  import Stethoscope from '@lucide/svelte/icons/stethoscope'
   import SettingsIcon from '@lucide/svelte/icons/settings'
   import Calculators from './lib/Calculators.svelte'
   import Documents from './lib/Documents.svelte'
@@ -27,6 +28,7 @@
   import { allergy, condition, medication, procedure, result, symptom, vaccine } from './lib/model/fhir.ts'
   import { emergencyLine } from './lib/model/places.ts'
   import RecordList from './lib/RecordList.svelte'
+  import Report from './lib/Report.svelte'
   import Search from './lib/Search.svelte'
   import { session } from './lib/session.svelte.ts'
   import Settings from './lib/Settings.svelte'
@@ -47,6 +49,7 @@
     { id: 'track', label: 'Track', icon: HeartPulse },
     { id: 'trends', label: 'Trends', icon: ChartLine },
     { id: 'calc', label: 'Calculators', icon: CalculatorIcon },
+    { id: 'report', label: 'Doctor report', icon: Stethoscope },
     { id: 'documents', label: 'Documents', icon: FolderOpen },
     { id: 'import', label: 'Import', icon: ImportIcon },
     { id: 'timeline', label: 'Timeline', icon: History },
@@ -141,6 +144,10 @@
           <h1>Calculators</h1>
           <p class="lead">Worked out on this device from {session.personName}'s newest records. Change any number to try another. These are screening numbers, not a diagnosis.</p>
           <Calculators />
+        {:else if page === 'report'}
+          <h1>Doctor report</h1>
+          <p class="lead">A PDF summary of {session.personName}'s records to print, email or show at an appointment.</p>
+          <Report />
         {:else if page === 'search'}
           <h1>Search</h1>
           <p class="lead">Find anything in the records by the words in it, including words read from documents.</p>
