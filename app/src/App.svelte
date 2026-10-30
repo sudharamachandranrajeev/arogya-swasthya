@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Card, Segmented, Shell, ThemeEditor, ThemePicker, ui, type NavItem } from '@swasthya/ui'
   import Activity from '@lucide/svelte/icons/activity'
+  import CalculatorIcon from '@lucide/svelte/icons/calculator'
   import Camera from '@lucide/svelte/icons/camera'
   import Dumbbell from '@lucide/svelte/icons/dumbbell'
   import HeartPulse from '@lucide/svelte/icons/heart-pulse'
@@ -17,6 +18,7 @@
   import PillIcon from '@lucide/svelte/icons/pill'
   import SearchIcon from '@lucide/svelte/icons/search'
   import SettingsIcon from '@lucide/svelte/icons/settings'
+  import Calculators from './lib/Calculators.svelte'
   import Documents from './lib/Documents.svelte'
   import Doses from './lib/Doses.svelte'
   import Home from './lib/Home.svelte'
@@ -44,6 +46,7 @@
     { id: 'results', label: 'Results', icon: Activity },
     { id: 'track', label: 'Track', icon: HeartPulse },
     { id: 'trends', label: 'Trends', icon: ChartLine },
+    { id: 'calc', label: 'Calculators', icon: CalculatorIcon },
     { id: 'documents', label: 'Documents', icon: FolderOpen },
     { id: 'import', label: 'Import', icon: ImportIcon },
     { id: 'timeline', label: 'Timeline', icon: History },
@@ -134,6 +137,10 @@
           <h1>Trends</h1>
           <p class="lead">How {session.personName}'s readings change over time. A change is worth talking over with a clinician, not a diagnosis.</p>
           <Trends />
+        {:else if page === 'calc'}
+          <h1>Calculators</h1>
+          <p class="lead">Worked out on this device from {session.personName}'s newest records. Change any number to try another. These are screening numbers, not a diagnosis.</p>
+          <Calculators />
         {:else if page === 'search'}
           <h1>Search</h1>
           <p class="lead">Find anything in the records by the words in it, including words read from documents.</p>

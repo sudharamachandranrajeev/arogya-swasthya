@@ -155,7 +155,10 @@
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .settings { margin-top: 16px; display: grid; gap: 6px; }
   .check { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .hhmm { width: 4.5em; }
+  .hhmm {
+    width: 4.5em; font: inherit; color: var(--c-ink); background: var(--c-panel);
+    border: 1px solid var(--c-line); border-radius: var(--r-control); padding: 4px 8px;
+  }
   .indent { margin-left: 26px; }
   .small { font-size: var(--text-small); }
   .muted { color: var(--c-muted); }
