@@ -34,6 +34,18 @@ Tracking and reports:
 - Export a patient summary (IPS) or every record as a FHIR Bundle from Settings → Export.
   Import reads NDJSON files too.
 
+The body:
+
+- A 3D body on the Body page. Conditions and operations with a part of the body light up in
+  their status colour; ones without a part are placed by name when the name points to one place
+  (asthma and the lungs). An "As of" slider shows the body in an earlier year. Organs the model
+  lacks (thyroid, spleen, breasts, uterus, ovaries) show as markers. Works without 3D too: the
+  same records are listed beside it.
+- Photo series on the Photos page: photos of one part of the body over time, kept encrypted.
+  The camera shows the last photo as a faint guide; checks for blur and light are hints only.
+  Compare two photos side by side or with a slider. Photos are re-saved, which drops location
+  and camera details.
+
 ## [0.1.0]
 
 The first release (alpha). Installers for Windows, Linux and Android.

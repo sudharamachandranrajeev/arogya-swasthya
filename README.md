@@ -59,6 +59,13 @@ Status: **alpha**. The records screens, backups and updates work; the features l
   appointment. Made on the device.
 - 📤 **Take your records anywhere** – save a patient summary (IPS) other health apps and clinics
   can read, or every record as a FHIR file.
+- 🧍 **Your body in 3D** – conditions and operations light up on a 3D body you can turn and
+  zoom, coloured by whether they are active, come and go, or are over. Slide back through the
+  years to see the body as it was. Tap a part to see its records.
+- 📷 **Photo series** – photograph a mole, rash or scar the same way each time. The camera shows
+  the last photo faintly as a guide, the app points out blur or different light, and you compare
+  two photos side by side or with a slider. The app does not judge what a photo shows; take
+  changes to a clinician.
 - 🧪 **Test results that make sense** – copy the lab's normal range and the app shows whether
   each result is in range.
 - 📅 **Dates the way you remember them** – pick a day from a calendar, or just a month or a year
@@ -74,8 +81,8 @@ Status: **alpha**. The records screens, backups and updates work; the features l
 - 🎨 **Three looks, light or dark** – Sage, Aurora and Journal, a calm mode with less motion,
   or make your own.
 
-Coming in later versions: a 3D body map, finding care near you, exercise plans,
-photo series, care plans and optional AI help.
+Coming in later versions: finding care near you, exercise plans, care plans and optional AI
+help.
 
 ## 📸 Screenshots
 
@@ -177,6 +184,9 @@ flowchart LR
   are decrypted on your device.
 - **Reminders:** set up on the device by the app; nothing is sent to a server. A reminder says
   only "Time for a medicine" unless you turn on names in **Medicines → Today**.
+- **Body photos:** kept encrypted like other documents, and only on the **Photos** page. The
+  app makes a fresh copy of each photo, which drops the location and camera details a phone
+  adds.
 - **Exports and reports:** a doctor report or an export saved with **Settings → Export** is a
   normal file, not encrypted. Keep it somewhere private, and delete it when it is no longer
   needed.
@@ -353,6 +363,11 @@ will not see it.
 - [Typst](https://typst.app) through [typst-as-lib](https://github.com/Relacibo/typst-as-lib)
   for the doctor report, set in [Libertinus Serif](https://github.com/alerque/libertinus)
   (SIL Open Font License, bundled in `app/src-tauri/fonts`)
+- The 3D body is made from [BodyParts3D](https://lifesciencedb.jp/bp3d/), © The Database
+  Center for Life Science (CC BY 4.0). Our simplified model, `app/public/anatomy/body.glb`, is
+  shared under CC BY-SA 4.0 (see `app/public/anatomy/LICENSE.md`). Drawn with
+  [three.js](https://threejs.org), shrunk with [glTF Transform](https://gltf-transform.dev) and
+  [meshoptimizer](https://github.com/zeux/meshoptimizer)
 - [Lucide](https://lucide.dev) icons
 - [Inter](https://rsms.me/inter/), [Fraunces](https://github.com/undercasetype/Fraunces),
   [Space Grotesk](https://github.com/floriankarsten/space-grotesk) and
@@ -361,7 +376,7 @@ will not see it.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE), except the 3D body model in `app/public/anatomy/`, which is CC BY-SA 4.0.
 
 ---
 
