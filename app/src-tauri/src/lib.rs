@@ -5,6 +5,7 @@
 mod data;
 mod docs;
 mod import;
+mod reminders;
 mod text;
 #[cfg(desktop)]
 mod transcribe;
@@ -445,12 +446,23 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.unminimize();
-                    let _ = w.set_focus();
-                }
+                reminders::desktop::show(app)
             }))
-            .plugin(tauri_plugin_updater::Builder::new().build());
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(
+                tauri_plugin_autostart::Builder::new()
+                    .arg(reminders::desktop::BACKGROUND_ARG)
+                    .build(),
+            )
+            // With reminders on, closing the window leaves the app in the tray.
+            .on_window_event(|w, e| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = e
+                    && reminders::desktop::KEEP_RUNNING.load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    api.prevent_close();
+                    let _ = w.hide();
+                }
+            });
     }
     #[cfg(mobile)]
     {
@@ -462,6 +474,7 @@ pub fn run() {
         .plugin(tauri_plugin_swasthya_device::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(dir.join(BACKUP_DIR))?;
@@ -481,8 +494,17 @@ pub fn run() {
             // Backups need no unlock: they copy the encrypted data as it is.
             state.maintain();
             text::start(&handle);
+            reminders::refresh(&handle);
             #[cfg(desktop)]
-            upkeep_loop(handle);
+            {
+                if std::env::args().any(|a| a == reminders::desktop::BACKGROUND_ARG)
+                    && let Some(w) = handle.get_webview_window("main")
+                {
+                    let _ = w.hide();
+                }
+                reminders::desktop::start(handle.clone());
+                upkeep_loop(handle);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -514,6 +536,11 @@ pub fn run() {
             text::text_status,
             text::set_ocr,
             text::set_transcribe,
+            reminders::reminder_settings,
+            reminders::set_reminders,
+            reminders::doses_today,
+            reminders::mark_dose,
+            reminders::refresh_reminders,
             update::update_status,
             update::set_update_mode,
             update::open_page,

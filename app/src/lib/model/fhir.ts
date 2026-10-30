@@ -11,7 +11,7 @@ export type Values = Record<string, string>
 export interface Field {
   key: string
   label: string
-  type: 'text' | 'date' | 'select' | 'number' | 'note'
+  type: 'text' | 'date' | 'select' | 'number' | 'note' | 'times'
   /** JSON path inside the resource ("a.0.b"). */
   path: string
   options?: [value: string, label: string][]
@@ -109,6 +109,19 @@ const text = (r: Resource, path: string) => {
 }
 const label = (f: Field | undefined, v: string) => f?.options?.find(([k]) => k === v)?.[1] ?? v
 const join = (...xs: string[]) => xs.filter(Boolean).join(' · ')
+/** "8:00, 20:30" to ["08:00:00", "20:30:00"], sorted, without repeats.
+ *  Null when any part is not a time. */
+export function parseTimes(raw: string): string[] | null {
+  const out = new Set<string>()
+  for (const part of raw.split(/[,;\s]+/).filter(Boolean)) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(part)
+    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null
+    out.add(`${m[1].padStart(2, '0')}:${m[2]}:00`)
+  }
+  return [...out].sort()
+}
+const MAX_TIMES = 8
+
 const note: Field = { key: 'note', label: 'Notes', type: 'note', path: 'note.0.text' }
 
 // ---- kinds ----
@@ -171,6 +184,10 @@ export const medication: Kind = {
     { key: 'name', label: 'Medicine', type: 'text', path: 'medicationCodeableConcept.text', list: lists.medicines, required: true, explain: 'Name and strength as on the box, e.g. "Metformin 500 mg".' },
     { key: 'dose', label: 'How you take it', type: 'text', path: 'dosage.0.text', explain: 'In your own words, e.g. "one tablet twice a day with food".' },
     {
+      key: 'times', label: 'Reminder times', type: 'times', path: 'dosage.0.timing.repeat.timeOfDay',
+      explain: 'Times of day to take it, on the 24-hour clock, e.g. "08:00, 20:00". Leave empty for no reminders. Reminders are turned on below the Today list.',
+    },
+    {
       key: 'status', label: 'Status', type: 'select', path: 'status', required: true,
       options: [['active', 'Taking now'], ['on-hold', 'Paused'], ['completed', 'Finished the course'], ['stopped', 'Stopped']],
     },
@@ -179,11 +196,14 @@ export const medication: Kind = {
     { key: 'reason', label: 'What it is for', type: 'text', path: 'reasonCode.0.text', list: lists.conditions },
     note,
   ],
-  summary: (r) => ({
-    title: text(r, 'medicationCodeableConcept.text'),
-    sub: join(text(r, 'dosage.0.text'), label(medication.fields[2], text(r, 'status'))),
-    date: text(r, 'effectivePeriod.start'),
-  }),
+  summary: (r) => {
+    const { times, status } = fromFhir(medication, r)
+    return {
+      title: text(r, 'medicationCodeableConcept.text'),
+      sub: join(text(r, 'dosage.0.text'), times && `at ${times}`, label(medication.fields.find((f) => f.key === 'status'), status)),
+      date: text(r, 'effectivePeriod.start'),
+    }
+  },
 }
 
 export const allergy: Kind = {
@@ -384,7 +404,10 @@ export function fromFhir(kind: Kind, r: Resource): Values {
   const v: Values = {}
   for (const f of kind.fields) {
     if (f.path === 'value') v[f.key] = resultValue(r).value
-    else v[f.key] = text(r, f.path)
+    else if (f.type === 'times') {
+      const ts = getPath(r, f.path)
+      v[f.key] = Array.isArray(ts) ? ts.filter((t) => typeof t === 'string').map((t) => t.slice(0, 5)).join(', ') : ''
+    } else v[f.key] = text(r, f.path)
   }
   return v
 }
@@ -403,6 +426,9 @@ export function toFhir(kind: Kind, values: Values, person: string, old?: Resourc
     if (f.type === 'number') {
       const n = Number(raw)
       setPath(r, f.path, raw && Number.isFinite(n) ? n : undefined)
+    } else if (f.type === 'times') {
+      const ts = parseTimes(raw)
+      setPath(r, f.path, ts?.length ? ts : undefined)
     } else setPath(r, f.path, raw || undefined)
   }
   if (kind === result) {
@@ -428,6 +454,11 @@ export function check(kind: Kind, values: Values): string[] {
     const v = (values[f.key] ?? '').trim()
     if (f.required && !v) out.push(`${f.label} is needed.`)
     if (v && f.type === 'date' && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(v)) out.push(`${f.label}: use a date like 2024-03-15, 2024-03 or 2024.`)
+    if (v && f.type === 'times') {
+      const ts = parseTimes(v)
+      if (!ts) out.push(`${f.label}: use 24-hour times like 08:00, 20:00.`)
+      else if (ts.length > MAX_TIMES) out.push(`${f.label}: at most ${MAX_TIMES} a day.`)
+    }
     if (v && f.type === 'number') {
       const n = Number(v)
       if (!Number.isFinite(n)) out.push(`${f.label} must be a number.`)

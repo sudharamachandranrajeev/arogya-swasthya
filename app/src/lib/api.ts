@@ -121,6 +121,29 @@ export interface TextStatus {
 
 export type Page = 'releases' | 'bug' | 'idea'
 
+export interface ReminderSettings {
+  on: boolean
+  /** Show the medicine's name in reminders (seen on a locked screen). */
+  names: boolean
+  /** No second reminder between these times: ["22:00", "07:00"]. */
+  quiet: [string, string] | null
+}
+
+export interface Dose {
+  med: string
+  person: string
+  personName: string
+  name: string
+  /** "2026-10-30" */
+  date: string
+  /** "08:00" */
+  time: string
+  status: 'taken' | 'skipped' | null
+  at: string | null
+  /** When this medicine was last marked taken, on any day. */
+  lastTaken: string | null
+}
+
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
 
 export interface Api {
@@ -180,6 +203,15 @@ export interface Api {
   trash(): Promise<Trashed[]>
   undo(): Promise<string | null>
   exportBundle(person: string | null): Promise<Resource>
+  reminderSettings(): Promise<ReminderSettings>
+  /** Asks for permission to notify when turning reminders on. */
+  setReminders(settings: ReminderSettings): Promise<void>
+  /** Today's doses for everyone, in time order. */
+  dosesToday(): Promise<Dose[]>
+  /** Mark a dose taken or skipped; null clears the mark. */
+  markDose(dose: Dose, status: 'taken' | 'skipped' | null): Promise<void>
+  /** Reschedule reminders after medicines change. */
+  refreshReminders(): Promise<void>
 }
 
 const tauri: Api = {
@@ -226,6 +258,11 @@ const tauri: Api = {
   search: (person, words) => invoke('search', { person, words }),
   save: (resource) => invoke('save_record', { resource }),
   saveAll: (resources, label) => invoke('save_records', { resources, label }),
+  reminderSettings: () => invoke('reminder_settings'),
+  setReminders: (settings) => invoke('set_reminders', { settings }),
+  dosesToday: () => invoke('doses_today'),
+  markDose: (d, status) => invoke('mark_dose', { med: d.med, date: d.date, time: d.time, status }),
+  refreshReminders: () => invoke('refresh_reminders'),
   remove: (id) => invoke('delete_record', { id }),
   restore: (id) => invoke('restore_record', { id }),
   trash: () => invoke('trash'),
@@ -401,6 +438,32 @@ function memory(): Api {
       type: 'collection',
       entry: live().filter((r) => !person || personOf(r) === person).map((resource) => ({ resource })),
     }),
+    reminderSettings: async () => clone((settings.get('reminders') as ReminderSettings | undefined) ?? { on: false, names: false, quiet: null }),
+    setReminders: async (s) => void settings.set('reminders', clone(s)),
+    dosesToday: async () => {
+      const date = new Date().toLocaleDateString('en-CA')
+      const log = (settings.get('reminders.log') as Record<string, { status: Dose['status']; at: string }>) ?? {}
+      const people = live().filter((r) => r.resourceType === 'Patient')
+      return live()
+        .filter((r) => r.resourceType === 'MedicationStatement' && r.status === 'active')
+        .flatMap((r) => {
+          const times = ((r as { dosage?: { timing?: { repeat?: { timeOfDay?: string[] } } }[] }).dosage?.[0]?.timing?.repeat?.timeOfDay ?? []).map((t) => t.slice(0, 5))
+          const person = personOf(r) ?? ''
+          const taken = Object.entries(log).filter(([k, m]) => k.split('|')[1] === r.id && m.status === 'taken').map(([, m]) => m.at).sort().pop() ?? null
+          return [...new Set(times)].map((time): Dose => {
+            const m = log[`${date}|${r.id}|${time}`]
+            return { med: r.id!, person, personName: name(people.find((p) => p.id === person) ?? r), name: name(r), date, time, status: m?.status ?? null, at: m?.at ?? null, lastTaken: taken }
+          })
+        })
+        .sort((a, b) => a.time.localeCompare(b.time))
+    },
+    markDose: async (d, status) => {
+      const log = { ...((settings.get('reminders.log') as Record<string, unknown>) ?? {}) }
+      if (status) log[`${d.date}|${d.med}|${d.time}`] = { status, at: new Date().toISOString() }
+      else delete log[`${d.date}|${d.med}|${d.time}`]
+      settings.set('reminders.log', log)
+    },
+    refreshReminders: async () => {},
   }
 }
 

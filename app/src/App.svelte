@@ -18,6 +18,7 @@
   import SearchIcon from '@lucide/svelte/icons/search'
   import SettingsIcon from '@lucide/svelte/icons/settings'
   import Documents from './lib/Documents.svelte'
+  import Doses from './lib/Doses.svelte'
   import Home from './lib/Home.svelte'
   import Import from './lib/Import.svelte'
   import Lock from './lib/Lock.svelte'
@@ -115,7 +116,9 @@
           {#key recordKind}<RecordList kind={recordKinds.find((k) => k.type === recordKind)!} />{/key}
         {:else if page === 'medicines'}
           <h1>Medicines</h1>
-          <p class="lead">What {session.personName} takes, or has taken. Reminders arrive in a later version.</p>
+          <p class="lead">What {session.personName} takes, or has taken. Add reminder times to a medicine to see it under Today.</p>
+          <Doses />
+          <div class="gap"></div>
           <RecordList kind={medication} />
         {:else if page === 'results'}
           <h1>Results</h1>

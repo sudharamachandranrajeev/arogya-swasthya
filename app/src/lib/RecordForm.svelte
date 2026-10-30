@@ -62,6 +62,7 @@
             {id}
             bind:value={values[f.key]}
             inputmode={f.type === 'number' ? 'decimal' : undefined}
+            placeholder={f.type === 'times' ? '08:00, 20:00' : undefined}
             list={f.list ? `${id}-list` : undefined}
             autocomplete="off"
           />

@@ -2,7 +2,7 @@
 //   node --test 'app/test/*.test.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { allergy, check, classify, condition, fromFhir, kindOf, kinds, medication, result, setPath, symptom, toFhir, vaccine, vital } from '../src/lib/model/fhir.ts'
+import { allergy, check, classify, condition, fromFhir, kindOf, kinds, medication, parseTimes, result, setPath, symptom, toFhir, vaccine, vital } from '../src/lib/model/fhir.ts'
 import { checkReading, show, toObservation, toReading, vitalOf, vitals } from '../src/lib/model/vitals.ts'
 import { addHome, country, emergencyLine, emptyPlaces, removeHome } from '../src/lib/model/places.ts'
 import { terms } from '../src/lib/model/terms.ts'
@@ -174,4 +174,19 @@ test('trends group readings into series, keep the newest unit and the newest lab
   assert.equal(within(h, '3m', Date.parse('2026-03-10')).length, 1)
   assert.deepEqual(ticks(0, 10, 5), [0, 2, 4, 6, 8, 10])
   assert.deepEqual(ticks(71, 72.4), [71, 71.5, 72, 72.5])
+})
+
+test('medicine reminder times are FHIR timeOfDay, sorted, without repeats', () => {
+  assert.deepEqual(parseTimes('20:00, 8:00 08:00'), ['08:00:00', '20:00:00'])
+  assert.equal(parseTimes('8am'), null)
+  assert.equal(parseTimes('24:00'), null)
+  assert.deepEqual(parseTimes(''), [])
+  const r = toFhir(medication, { name: 'Metformin 500 mg', dose: 'one tablet', times: '20:00, 08:00', status: 'active' }, 'p1')
+  assert.deepEqual(r.dosage, [{ text: 'one tablet', timing: { repeat: { timeOfDay: ['08:00:00', '20:00:00'] } } }])
+  assert.equal(fromFhir(medication, r).times, '08:00, 20:00')
+  assert.match(medication.summary(r).sub, /at 08:00, 20:00 · Taking now/)
+  assert.deepEqual(check(medication, { name: 'X', status: 'active', times: '8 pm' }), ['Reminder times: use 24-hour times like 08:00, 20:00.'])
+  // Emptied times leave no timing behind.
+  const cleared = toFhir(medication, { name: 'Metformin 500 mg', dose: 'one tablet', times: '', status: 'active' }, 'p1', r)
+  assert.deepEqual(cleared.dosage, [{ text: 'one tablet' }])
 })
