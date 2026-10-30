@@ -3,6 +3,7 @@
   import Activity from '@lucide/svelte/icons/activity'
   import Camera from '@lucide/svelte/icons/camera'
   import Dumbbell from '@lucide/svelte/icons/dumbbell'
+  import HeartPulse from '@lucide/svelte/icons/heart-pulse'
   import FileText from '@lucide/svelte/icons/file-text'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import History from '@lucide/svelte/icons/history'
@@ -19,7 +20,7 @@
   import Home from './lib/Home.svelte'
   import Import from './lib/Import.svelte'
   import Lock from './lib/Lock.svelte'
-  import { allergy, condition, medication, procedure, result, vaccine } from './lib/model/fhir.ts'
+  import { allergy, condition, medication, procedure, result, symptom, vaccine } from './lib/model/fhir.ts'
   import { emergencyLine } from './lib/model/places.ts'
   import RecordList from './lib/RecordList.svelte'
   import Search from './lib/Search.svelte'
@@ -28,6 +29,7 @@
   import Timeline from './lib/Timeline.svelte'
   import Toast from './lib/Toast.svelte'
   import UpdateBanner from './lib/UpdateBanner.svelte'
+  import Vitals from './lib/Vitals.svelte'
   import { updates } from './lib/updates.svelte.ts'
   import Wizard from './lib/Wizard.svelte'
 
@@ -37,6 +39,7 @@
     { id: 'records', label: 'Records', icon: FileText },
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
     { id: 'results', label: 'Results', icon: Activity },
+    { id: 'track', label: 'Track', icon: HeartPulse },
     { id: 'documents', label: 'Documents', icon: FolderOpen },
     { id: 'import', label: 'Import', icon: ImportIcon },
     { id: 'timeline', label: 'Timeline', icon: History },
@@ -115,6 +118,12 @@
           <h1>Results</h1>
           <p class="lead">Test results with the lab's normal range. Outside the range is not always a problem: ask the person who ordered the test.</p>
           <RecordList kind={result} />
+        {:else if page === 'track'}
+          <h1>Track</h1>
+          <p class="lead">{session.personName}'s vital signs and symptoms over time.</p>
+          <Vitals />
+          <div class="gap"></div>
+          <RecordList kind={symptom} />
         {:else if page === 'search'}
           <h1>Search</h1>
           <p class="lead">Find anything in the records by the words in it, including words read from documents.</p>

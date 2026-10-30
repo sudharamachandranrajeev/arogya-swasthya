@@ -17,7 +17,7 @@
 
   const items = $derived(
     rows.map((r) => {
-      const k = kindOf(r.resourceType)
+      const k = kindOf(r)
       const s = k?.summary(r) ?? { title: r.resourceType, sub: '' }
       return { id: r.id!, year: s.date?.slice(0, 4) || 'No date', what: k?.title.replace(/s$/, '') ?? r.resourceType, ...s }
     }),

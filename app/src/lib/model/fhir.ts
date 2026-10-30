@@ -3,6 +3,7 @@
 // fields this app does not show (from an import, say) are kept as they were.
 
 import { lists } from './lists.ts'
+import { isVital, show, vitalOf } from './vitals.ts'
 
 export type Resource = { resourceType: string; id?: string; [k: string]: unknown }
 export type Values = Record<string, string>
@@ -17,6 +18,11 @@ export interface Field {
   /** Suggestions shown while typing (free text is still allowed). */
   list?: readonly string[]
   required?: boolean
+  /** Numbers: the smallest and largest allowed. */
+  min?: number
+  max?: number
+  /** Dates: a new record starts at today. */
+  today?: boolean
   explain?: string
 }
 
@@ -27,6 +33,10 @@ export interface Kind {
   /** One record, lower case: "a condition". */
   one: string
   explain: string
+  /** The page that lists this kind. */
+  page: string
+  /** Kinds sharing a FHIR type (Observation) tell their records apart. */
+  match?: (r: Resource) => boolean
   /** Field that points at the person, or '' for Patient. */
   personField: string
   fields: Field[]
@@ -86,7 +96,7 @@ export function setPath(r: Record<string, unknown>, path: string, value: unknown
 const coded = (system: string, code: string) => ({ coding: [{ system, code }] })
 const CLINICAL = 'http://terminology.hl7.org/CodeSystem/condition-clinical'
 const ALLERGY_CLINICAL = 'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical'
-const OBS_CATEGORY = 'http://terminology.hl7.org/CodeSystem/observation-category'
+export const OBS_CATEGORY = 'http://terminology.hl7.org/CodeSystem/observation-category'
 
 /** Fields whose form value is a code inside a CodeableConcept. */
 const CODED: Record<string, string> = {
@@ -105,6 +115,7 @@ const note: Field = { key: 'note', label: 'Notes', type: 'note', path: 'note.0.t
 
 export const patient: Kind = {
   type: 'Patient',
+  page: 'settings',
   title: 'People',
   one: 'a person',
   explain: 'Everyone whose record you keep here: you, and anyone you look after.',
@@ -124,6 +135,7 @@ export const patient: Kind = {
 
 export const condition: Kind = {
   type: 'Condition',
+  page: 'records',
   title: 'Conditions',
   one: 'a condition',
   explain: 'Illnesses, injuries and long-term conditions, past and present.',
@@ -149,6 +161,7 @@ export const condition: Kind = {
 
 export const medication: Kind = {
   type: 'MedicationStatement',
+  page: 'medicines',
   title: 'Medicines',
   one: 'a medicine',
   explain: 'Medicines and supplements you take or have taken, with the dose as written on the label.',
@@ -175,6 +188,7 @@ export const medication: Kind = {
 
 export const allergy: Kind = {
   type: 'AllergyIntolerance',
+  page: 'records',
   title: 'Allergies',
   one: 'an allergy',
   explain: 'Allergies and intolerances to medicines, foods and other things, with what happens.',
@@ -204,6 +218,7 @@ export const allergy: Kind = {
 
 export const procedure: Kind = {
   type: 'Procedure',
+  page: 'records',
   title: 'Procedures',
   one: 'a procedure',
   explain: 'Operations and other procedures done to you, such as surgery, scans with injections or endoscopies.',
@@ -221,6 +236,7 @@ export const procedure: Kind = {
 
 export const vaccine: Kind = {
   type: 'Immunization',
+  page: 'records',
   title: 'Vaccines',
   one: 'a vaccine',
   explain: 'Vaccines you have had, with the date and dose number where you know them.',
@@ -236,8 +252,49 @@ export const vaccine: Kind = {
   summary: (r) => ({ title: text(r, 'vaccineCode.text'), sub: join(text(r, 'protocolApplied.0.doseNumberString') && `Dose ${text(r, 'protocolApplied.0.doseNumberString')}`), date: text(r, 'occurrenceDateTime') }),
 }
 
+export const symptom: Kind = {
+  type: 'Observation',
+  page: 'track',
+  match: (r) => ((r.category as { text?: string }[] | undefined) ?? []).some((c) => c.text === 'Symptom'),
+  title: 'Symptoms',
+  one: 'a symptom',
+  explain: 'How you felt: what it was and how bad, from 0 (none) to 10 (the worst you can imagine), the scale most doctors use.',
+  base: { status: 'final', category: [{ coding: [{ system: OBS_CATEGORY, code: 'survey' }], text: 'Symptom' }] },
+  personField: 'subject',
+  fields: [
+    { key: 'name', label: 'Symptom', type: 'text', path: 'code.text', list: lists.symptoms, required: true },
+    { key: 'severity', label: 'How bad (0 to 10)', type: 'number', path: 'valueInteger', required: true, min: 0, max: 10, explain: '0 is none, 10 is the worst you can imagine.' },
+    { key: 'date', label: 'Date', type: 'date', path: 'effectiveDateTime', required: true, today: true },
+    note,
+  ],
+  summary: (r) => ({
+    title: text(r, 'code.text'),
+    sub: text(r, 'valueInteger') ? `${text(r, 'valueInteger')} out of 10` : '',
+    date: text(r, 'effectiveDateTime'),
+  }),
+}
+
+export const vital: Kind = {
+  type: 'Observation',
+  page: 'track',
+  match: (r) => isVital(r),
+  title: 'Vital signs',
+  one: 'a vital sign',
+  explain: 'Blood pressure, pulse, weight, temperature and other measurements taken at home or in clinic.',
+  base: {},
+  personField: 'subject',
+  // Entered on the Track page's own form, one or many at a time.
+  fields: [],
+  summary: (r) => ({
+    title: vitalOf(r)?.label ?? text(r, 'code.text'),
+    sub: show(r),
+    date: text(r, 'effectiveDateTime'),
+  }),
+}
+
 export const result: Kind = {
   type: 'Observation',
+  page: 'results',
   title: 'Results',
   one: 'a result',
   explain: 'Test results such as blood tests, with the range the lab calls normal. Charts arrive in a later version.',
@@ -265,6 +322,7 @@ export const result: Kind = {
 
 export const document: Kind = {
   type: 'DocumentReference',
+  page: 'documents',
   title: 'Documents',
   one: 'a document',
   explain: 'Letters, reports, scans, photos and recordings. Each file is encrypted and kept on this device with the records.',
@@ -295,8 +353,10 @@ export function attachment(r: Resource) {
   }
 }
 
-export const kinds = [condition, medication, allergy, procedure, vaccine, result, document]
-export const kindOf = (type: string) => [patient, ...kinds].find((k) => k.type === type)
+export const kinds = [condition, medication, allergy, procedure, vaccine, vital, symptom, result, document]
+/** The kind a record belongs to. Results take any Observation that is not
+ *  a vital sign or a symptom. */
+export const kindOf = (r: Resource) => [patient, ...kinds].find((k) => k.type === r.resourceType && (!k.match || k.match(r)))
 
 // ---- results ----
 
@@ -368,7 +428,12 @@ export function check(kind: Kind, values: Values): string[] {
     const v = (values[f.key] ?? '').trim()
     if (f.required && !v) out.push(`${f.label} is needed.`)
     if (v && f.type === 'date' && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(v)) out.push(`${f.label}: use a date like 2024-03-15, 2024-03 or 2024.`)
-    if (v && f.type === 'number' && !Number.isFinite(Number(v))) out.push(`${f.label} must be a number.`)
+    if (v && f.type === 'number') {
+      const n = Number(v)
+      if (!Number.isFinite(n)) out.push(`${f.label} must be a number.`)
+      else if ((f.min != null && n < f.min) || (f.max != null && n > f.max)) out.push(`${f.label} must be from ${f.min} to ${f.max}.`)
+      else if (f.path.endsWith('Integer') && !Number.isInteger(n)) out.push(`${f.label} must be a whole number.`)
+    }
   }
   const today = new Date().toISOString().slice(0, 10)
   for (const f of kind.fields)

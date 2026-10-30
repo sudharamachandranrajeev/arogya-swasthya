@@ -14,7 +14,9 @@
     ondone,
   }: { kind: Kind; person: string; record?: Resource; ondone: (saved?: Resource) => void } = $props()
 
-  const start = (): Values => (record ? fromFhir(kind, record) : {})
+  const today = new Date().toISOString().slice(0, 10)
+  const start = (): Values =>
+    record ? fromFhir(kind, record) : Object.fromEntries(kind.fields.filter((f) => f.today).map((f) => [f.key, today]))
   let values = $state<Values>(start())
   let problems = $state<string[]>([])
   let busy = $state(false)

@@ -30,7 +30,6 @@
       const [hit, rest = ''] = part.split('\u0003')
       return [{ text: hit, mark: true }, { text: rest, mark: false }]
     })
-  const pageOf: Record<string, string> = { MedicationStatement: 'medicines', Observation: 'results', DocumentReference: 'documents' }
   const nameOf = (id: string) => session.people.find((p) => p.id === id)
   const personName = (r: Hit['resource']) => {
     const ref = JSON.stringify(r).match(/"reference":"Patient\/([^"]+)"/)?.[1] ?? ''
@@ -53,9 +52,9 @@
   {:else}
     <div class="list">
       {#each hits as h (h.resource.id)}
-        {@const k = kindOf(h.resource.resourceType)}
+        {@const k = kindOf(h.resource)}
         {@const s = k?.summary(h.resource)}
-        <a class="hit" href={`#/${pageOf[h.resource.resourceType] ?? 'records'}`}>
+        <a class="hit" href={`#/${k?.page ?? 'records'}`}>
           <Row lead={s?.date ?? ''} title={s?.title || h.resource.resourceType} sub={[k?.one.replace(/^an? /, ''), everyone ? personName(h.resource) : ''].filter(Boolean).join(' · ')} />
           {#if h.snippet}
             <p class="snip">{#each pieces(h.snippet) as p, i (i)}{#if p.mark}<mark>{p.text}</mark>{:else}{p.text}{/if}{/each}</p>

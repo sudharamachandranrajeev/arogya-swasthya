@@ -88,7 +88,7 @@
     return (p?.name as { text?: string }[] | undefined)?.[0]?.text ?? 'someone in the trash'
   })
   const describe = (r: Resource) => {
-    const k = kindOf(r.resourceType)
+    const k = kindOf(r)
     const s = k?.summary(r)
     const code = (r.code as { text?: string } | undefined)?.text
     return { date: s?.date ?? '', title: s?.title || code || r.resourceType, kind: k?.one.replace(/^an? /, '') ?? 'report' }

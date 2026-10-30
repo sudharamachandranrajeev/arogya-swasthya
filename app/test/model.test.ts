@@ -2,7 +2,8 @@
 //   node --test 'app/test/*.test.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { allergy, check, classify, condition, fromFhir, kinds, medication, result, setPath, toFhir, vaccine } from '../src/lib/model/fhir.ts'
+import { allergy, check, classify, condition, fromFhir, kindOf, kinds, medication, result, setPath, symptom, toFhir, vaccine, vital } from '../src/lib/model/fhir.ts'
+import { checkReading, show, toObservation, toReading, vitalOf, vitals } from '../src/lib/model/vitals.ts'
 import { addHome, country, emergencyLine, emptyPlaces, removeHome } from '../src/lib/model/places.ts'
 import { terms } from '../src/lib/model/terms.ts'
 
@@ -67,7 +68,8 @@ test('check explains missing, malformed and future values', () => {
 })
 
 test('every kind has a summary and a required first field', () => {
-  for (const k of kinds) {
+  // Vital signs have their own form (Vitals.svelte).
+  for (const k of kinds.filter((k) => k !== vital)) {
     assert.ok(k.fields[0].required, k.type)
     assert.equal(typeof k.summary(toFhir(k, { name: 'x' }, 'p')).title, 'string')
   }
@@ -99,4 +101,53 @@ test('terms name the emergency number of where the person is', () => {
   const t = terms(addHome(emptyPlaces(), 'US'))
   assert.ok(t.points.some((x) => x.includes('emergency 911')))
   assert.ok(t.points.some((x) => /not a doctor/.test(x)))
+})
+
+const v = (key: string) => vitals.find((x) => x.key === key)!
+
+test('blood pressure is one Observation with two LOINC-coded parts in UCUM', () => {
+  const o = toObservation(v('bp'), { unit: 'mmHg', values: { systolic: '128', diastolic: '82' } }, 'p1', '2026-10-01')
+  assert.equal((o.code as any).coding[0].code, '85354-9')
+  assert.equal((o.category as any)[0].coding[0].code, 'vital-signs')
+  assert.deepEqual((o.component as any)[0].valueQuantity, { value: 128, unit: 'mmHg', system: 'http://unitsofmeasure.org', code: 'mm[Hg]' })
+  assert.equal((o.component as any)[1].code.coding[0].code, '8462-4')
+  assert.equal(o.valueQuantity, undefined)
+  assert.equal(show(o), '128/82 mmHg')
+  assert.equal(kindOf(o), vital)
+  assert.deepEqual(toReading(v('bp'), o), { unit: 'mmHg', values: { systolic: '128', diastolic: '82' } })
+})
+
+test('the unit chooses the code where it matters, and edits keep other fields', () => {
+  const o = toObservation(v('glucose'), { unit: 'mmol/L', values: { value: '5.4' } }, 'p1', '2026-10-01')
+  assert.equal((o.code as any).coding[0].code, '15074-8')
+  assert.equal(vitalOf(o), v('glucose'))
+  const old = { ...o, id: 'g1', note: [{ text: 'after breakfast' }] }
+  const e = toObservation(v('glucose'), { unit: 'mg/dL', values: { value: '97' } }, 'p1', '2026-10-02', old)
+  assert.equal(e.id, 'g1')
+  assert.deepEqual(e.note, [{ text: 'after breakfast' }])
+  assert.equal((e.code as any).coding[0].code, '2339-0')
+  assert.equal(show(e), '97 mg/dL')
+  const spo2 = toObservation(v('spo2'), { unit: '%', values: { value: '97' } }, 'p1', '2026-10-01')
+  assert.deepEqual((spo2.code as any).coding.map((c: any) => c.code), ['2708-6', '59408-5'])
+})
+
+test('readings refuse typing slips and half-filled blood pressure', () => {
+  assert.deepEqual(checkReading(v('weight'), { unit: 'kg', values: {} }), [])
+  assert.match(checkReading(v('weight'), { unit: 'kg', values: { value: '7150' } }).join(), /typing slip/)
+  assert.deepEqual(checkReading(v('weight'), { unit: 'lb', values: { value: '160' } }), [])
+  assert.match(checkReading(v('bp'), { unit: 'mmHg', values: { systolic: '120' } }).join(), /both/)
+  assert.match(checkReading(v('bp'), { unit: 'mmHg', values: { systolic: '80', diastolic: '120' } }).join(), /top number/)
+  assert.match(checkReading(v('temperature'), { unit: '°C', values: { value: 'warm' } }).join(), /number/)
+})
+
+test('symptoms are 0 to 10, and Observations sort into their kinds', () => {
+  const s = toFhir(symptom, { name: 'Headache', severity: '6', date: '2026-10-01' }, 'p1')
+  assert.equal(s.valueInteger, 6)
+  assert.equal(kindOf(s), symptom)
+  assert.equal(symptom.summary(s).sub, '6 out of 10')
+  assert.match(check(symptom, { name: 'x', severity: '11', date: '2026-10-01' }).join(), /from 0 to 10/)
+  assert.match(check(symptom, { name: 'x', severity: '2.5', date: '2026-10-01' }).join(), /whole number/)
+  const lab = toFhir(result, { name: 'Ferritin', value: '45', date: '2026-10-01' }, 'p1')
+  assert.equal(kindOf(lab), result)
+  assert.equal(kindOf({ resourceType: 'Observation' }), result, 'an imported Observation with no category is a result')
 })

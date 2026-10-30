@@ -3,7 +3,7 @@
   // changed lately, and the emergency number for where they are.
   import { Card, Stat } from '@swasthya/ui'
   import { api } from './api.ts'
-  import { kinds } from './model/fhir.ts'
+  import { kindOf, kinds } from './model/fhir.ts'
   import { emergencyLine } from './model/places.ts'
   import { session } from './session.svelte.ts'
   import Timeline from './Timeline.svelte'
@@ -13,12 +13,16 @@
     void session.version
     const person = session.current
     if (!person) return
-    Promise.all(kinds.map((k) => api.records(person, k.type).then((r) => [k.type, r.length] as const))).then(
-      (pairs) => (counts = Object.fromEntries(pairs)),
-      session.fail.bind(session),
-    )
+    const types = [...new Set(kinds.map((k) => k.type))]
+    Promise.all(types.map((t) => api.records(person, t))).then((lists) => {
+      const c: Record<string, number> = {}
+      for (const r of lists.flat()) {
+        const k = kindOf(r)
+        if (k) c[k.title] = (c[k.title] ?? 0) + 1
+      }
+      counts = c
+    }, session.fail.bind(session))
   })
-  const pages: Record<string, string> = { MedicationStatement: 'medicines', Observation: 'results', DocumentReference: 'documents' }
 </script>
 
 <h1>{session.personName || 'Overview'}</h1>
@@ -33,9 +37,9 @@
 {/if}
 
 <div class="stats">
-  {#each kinds as k (k.type)}
-    <a href={`#/${pages[k.type] ?? 'records'}`} class="stat">
-      <Stat label={k.title} value={String(counts[k.type] ?? 0)} explain={k.explain} />
+  {#each kinds as k (k.title)}
+    <a href={`#/${k.page}`} class="stat">
+      <Stat label={k.title} value={String(counts[k.title] ?? 0)} explain={k.explain} />
     </a>
   {/each}
 </div>

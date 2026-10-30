@@ -29,6 +29,10 @@ export const lists = {
     'COVID-19', 'Influenza', 'Hepatitis A', 'Hepatitis B', 'HPV', 'MMR', 'Pneumococcal', 'Polio',
     'Shingles', 'Tetanus, diphtheria, polio', 'Typhoid', 'Yellow fever', 'BCG (tuberculosis)', 'Meningitis ACWY',
   ],
+  symptoms: [
+    'Headache', 'Tiredness', 'Pain', 'Back pain', 'Joint pain', 'Chest pain', 'Shortness of breath', 'Cough',
+    'Dizziness', 'Nausea', 'Low mood', 'Anxiety', 'Poor sleep', 'Fever', 'Stomach ache', 'Itching',
+  ],
   tests: [
     'HbA1c', 'Fasting glucose', 'Total cholesterol', 'LDL cholesterol', 'HDL cholesterol', 'Triglycerides',
     'Haemoglobin', 'White cell count', 'Platelets', 'Ferritin', 'Vitamin D', 'Vitamin B12', 'TSH',

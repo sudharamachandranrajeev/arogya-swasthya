@@ -173,6 +173,8 @@ export interface Api {
   /** Best matches first; `snippet` marks each match between \u0002 and \u0003. */
   search(person: string | null, words: string): Promise<Hit[]>
   save(resource: Resource): Promise<Resource>
+  /** Save several as one change, so one Undo takes them all back. */
+  saveAll(resources: Resource[], label: string): Promise<Resource[]>
   remove(id: string): Promise<void>
   restore(id: string): Promise<void>
   trash(): Promise<Trashed[]>
@@ -223,6 +225,7 @@ const tauri: Api = {
   timeline: (person) => invoke('timeline', { person }),
   search: (person, words) => invoke('search', { person, words }),
   save: (resource) => invoke('save_record', { resource }),
+  saveAll: (resources, label) => invoke('save_records', { resources, label }),
   remove: (id) => invoke('delete_record', { id }),
   restore: (id) => invoke('restore_record', { id }),
   trash: () => invoke('trash'),
@@ -356,6 +359,16 @@ function memory(): Api {
         throw `no person with id ${person}, or they are in the trash`
       change(`${rows.has(r.id!) ? 'edit' : 'add'} ${r.resourceType} “${name(r)}”`, () => rows.set(r.id!, { r }))
       return r
+    },
+    saveAll: async (resources, label) => {
+      const out = resources.map((resource) => {
+        const r = clone(resource)
+        r.id ??= crypto.randomUUID()
+        r.meta = { lastUpdated: new Date().toISOString() }
+        return r
+      })
+      change(label, () => out.forEach((r) => rows.set(r.id!, { r })))
+      return out
     },
     remove: async (id) => {
       const row = rows.get(id)

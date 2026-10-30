@@ -386,6 +386,16 @@ fn save_record(state: State<App>, resource: Value) -> CommandResult<Value> {
     state.with(|s| s.save(resource, now()))
 }
 
+/// Save several records as one change: one Undo takes them all back.
+#[tauri::command]
+fn save_records(
+    state: State<App>,
+    resources: Vec<Value>,
+    label: String,
+) -> CommandResult<Vec<Value>> {
+    state.with(|s| s.save_all(resources, &label, now()))
+}
+
 #[tauri::command]
 fn delete_record(state: State<App>, id: String) -> CommandResult<()> {
     state.with(|s| s.delete(&id, now()))
@@ -518,6 +528,7 @@ pub fn run() {
             timeline,
             search,
             save_record,
+            save_records,
             delete_record,
             restore_record,
             trash,

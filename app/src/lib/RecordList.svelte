@@ -2,7 +2,7 @@
   // One person's records of one kind: list, add, edit, delete (with Undo).
   import { Button, Card, Row } from '@swasthya/ui'
   import { api } from './api.ts'
-  import type { Kind, Resource } from './model/fhir.ts'
+  import { kindOf, type Kind, type Resource } from './model/fhir.ts'
   import RecordForm from './RecordForm.svelte'
   import { session } from './session.svelte.ts'
 
@@ -15,7 +15,7 @@
     void session.version
     const person = session.current
     if (!person) return
-    api.records(person, kind.type).then((r) => (rows = r), session.fail.bind(session))
+    api.records(person, kind.type).then((r) => (rows = r.filter((x) => kindOf(x) === kind)), session.fail.bind(session))
   })
 
   async function remove(r: Resource) {

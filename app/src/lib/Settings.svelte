@@ -146,7 +146,7 @@
   })
   const daysLeft = (at: string) => Math.max(0, 30 - Math.floor((Date.now() - Date.parse(at)) / 86_400_000))
   const describe = (r: Resource) => {
-    const k = kindOf(r.resourceType)
+    const k = kindOf(r)
     return { title: k?.summary(r).title || r.resourceType, what: k?.one.replace(/^an? /, '') ?? r.resourceType }
   }
 </script>
