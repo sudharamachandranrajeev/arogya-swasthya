@@ -16,7 +16,8 @@
     "allowJs": true,
     "checkJs": true,
     "moduleDetection": "force",
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "../ui/src/**/*.ts", "../ui/src/**/*.svelte"]
 }
