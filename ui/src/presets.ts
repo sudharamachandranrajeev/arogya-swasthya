@@ -42,6 +42,7 @@ export const colourHelp: Record<ColourName, string> = {
   onAccent: 'Text on main buttons',
   accent2: 'Second colour: gradients and highlights',
   accentSoft: 'Soft background behind main-colour labels',
+  chart: 'Chart lines and dots',
   danger: 'Needs attention now',
   dangerSoft: 'Background behind "needs attention" labels',
   warn: 'Worth a look',

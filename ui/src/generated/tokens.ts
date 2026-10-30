@@ -89,6 +89,16 @@ export const tokens: Tokens = {
         4.5
       ],
       [
+        "chart",
+        "panel",
+        3
+      ],
+      [
+        "chart",
+        "panel2",
+        3
+      ],
+      [
         "danger",
         "dangerSoft",
         4.5
@@ -181,6 +191,7 @@ export const tokens: Tokens = {
           "onAccent": "#ffffff",
           "accent2": "#3f8f81",
           "accentSoft": "#e6f3ef",
+          "chart": "#00876f",
           "danger": "#b53a0a",
           "dangerSoft": "#fde7da",
           "warn": "#8f5706",
@@ -204,6 +215,7 @@ export const tokens: Tokens = {
           "onAccent": "#062520",
           "accent2": "#8fd3c4",
           "accentSoft": "#1d3d36",
+          "chart": "#2f9e89",
           "danger": "#ff9a70",
           "dangerSoft": "#3d2116",
           "warn": "#f0b75a",
@@ -266,6 +278,7 @@ export const tokens: Tokens = {
           "onAccent": "#0a1030",
           "accent2": "#3ee6c4",
           "accentSoft": "#1d2a5c",
+          "chart": "#5a7ce8",
           "danger": "#ff7a96",
           "dangerSoft": "#3a1a26",
           "warn": "#ffc561",
@@ -289,6 +302,7 @@ export const tokens: Tokens = {
           "onAccent": "#ffffff",
           "accent2": "#0f9e86",
           "accentSoft": "#e3e9ff",
+          "chart": "#3654d6",
           "danger": "#b92c48",
           "dangerSoft": "#fde3ea",
           "warn": "#875600",
@@ -351,6 +365,7 @@ export const tokens: Tokens = {
           "onAccent": "#fffaf2",
           "accent2": "#5b7f5a",
           "accentSoft": "#f8e6d9",
+          "chart": "#a84a22",
           "danger": "#a02f27",
           "dangerSoft": "#f4d9d3",
           "warn": "#7d560c",
@@ -374,6 +389,7 @@ export const tokens: Tokens = {
           "onAccent": "#1b1612",
           "accent2": "#9cbf8f",
           "accentSoft": "#43291c",
+          "chart": "#c96f43",
           "danger": "#f29488",
           "dangerSoft": "#45231f",
           "warn": "#e0b45c",

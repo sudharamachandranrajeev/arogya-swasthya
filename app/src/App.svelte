@@ -4,6 +4,7 @@
   import Camera from '@lucide/svelte/icons/camera'
   import Dumbbell from '@lucide/svelte/icons/dumbbell'
   import HeartPulse from '@lucide/svelte/icons/heart-pulse'
+  import ChartLine from '@lucide/svelte/icons/chart-line'
   import FileText from '@lucide/svelte/icons/file-text'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import History from '@lucide/svelte/icons/history'
@@ -29,6 +30,7 @@
   import Timeline from './lib/Timeline.svelte'
   import Toast from './lib/Toast.svelte'
   import UpdateBanner from './lib/UpdateBanner.svelte'
+  import Trends from './lib/Trends.svelte'
   import Vitals from './lib/Vitals.svelte'
   import { updates } from './lib/updates.svelte.ts'
   import Wizard from './lib/Wizard.svelte'
@@ -40,6 +42,7 @@
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
     { id: 'results', label: 'Results', icon: Activity },
     { id: 'track', label: 'Track', icon: HeartPulse },
+    { id: 'trends', label: 'Trends', icon: ChartLine },
     { id: 'documents', label: 'Documents', icon: FolderOpen },
     { id: 'import', label: 'Import', icon: ImportIcon },
     { id: 'timeline', label: 'Timeline', icon: History },
@@ -124,6 +127,10 @@
           <Vitals />
           <div class="gap"></div>
           <RecordList kind={symptom} />
+        {:else if page === 'trends'}
+          <h1>Trends</h1>
+          <p class="lead">How {session.personName}'s readings change over time. A change is worth talking over with a clinician, not a diagnosis.</p>
+          <Trends />
         {:else if page === 'search'}
           <h1>Search</h1>
           <p class="lead">Find anything in the records by the words in it, including words read from documents.</p>

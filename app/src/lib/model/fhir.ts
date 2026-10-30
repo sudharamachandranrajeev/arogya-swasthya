@@ -297,7 +297,7 @@ export const result: Kind = {
   page: 'results',
   title: 'Results',
   one: 'a result',
-  explain: 'Test results such as blood tests, with the range the lab calls normal. Charts arrive in a later version.',
+  explain: 'Test results such as blood tests, with the range the lab calls normal. Tests recorded more than once with a number are charted on Trends.',
   personField: 'subject',
   base: { status: 'final', category: [coded(OBS_CATEGORY, 'laboratory')] },
   fields: [

@@ -151,3 +151,27 @@ test('symptoms are 0 to 10, and Observations sort into their kinds', () => {
   assert.equal(kindOf(lab), result)
   assert.equal(kindOf({ resourceType: 'Observation' }), result, 'an imported Observation with no category is a result')
 })
+
+test('trends group readings into series, keep the newest unit and the newest lab range', async () => {
+  const { series, ticks, within } = await import('../src/lib/model/trends.ts')
+  const bp = (d: string, a: string, b: string) => toObservation(v('bp'), { unit: 'mmHg', values: { systolic: a, diastolic: b } }, 'p1', d)
+  const kg = (d: string, n: string, unit = 'kg') => toObservation(v('weight'), { unit, values: { value: n } }, 'p1', d)
+  const lab = (d: string, n: string, high: string) => toFhir(result, { name: 'HbA1c', value: n, unit: 'mmol/mol', low: '20', high, date: d }, 'p1')
+  const sym = (d: string, n: string) => toFhir(symptom, { name: 'Headache', severity: n, date: d }, 'p1')
+  const all = series([bp('2026-01-02', '130', '85'), bp('2026-03-02', '124', '80'), kg('2026-01-01', '72'), kg('2026-02-01', '160', 'lb'), kg('2026-03-01', '71'),
+    lab('2025-06', '52', '41'), lab('2026-01-15', '45', '42'), sym('2026-02-01', '4'), sym('2026-02-03', '2'), { resourceType: 'Observation', valueString: 'negative', code: { text: 'Covid test' } }])
+  assert.deepEqual(all.map((s) => s.id), ['vital:bp', 'vital:weight', 'result:hba1c', 'symptom:headache'])
+  const [b, w, h, s] = all
+  assert.ok(b.paired)
+  assert.deepEqual(b.points.map((p) => [p.v, p.lo]), [[130, 85], [124, 80]])
+  assert.equal(w.unit, 'kg')
+  assert.equal(w.otherUnits, 1)
+  assert.deepEqual(h.range, { low: 20, high: 42 })
+  assert.equal(h.points[0].date, '2025-06')
+  assert.equal(h.points[1].band, 'high')
+  assert.deepEqual(s.domain, [0, 10])
+  assert.equal(within(b, '3m', Date.parse('2026-03-10')).length, 2)
+  assert.equal(within(h, '3m', Date.parse('2026-03-10')).length, 1)
+  assert.deepEqual(ticks(0, 10, 5), [0, 2, 4, 6, 8, 10])
+  assert.deepEqual(ticks(71, 72.4), [71, 71.5, 72, 72.5])
+})

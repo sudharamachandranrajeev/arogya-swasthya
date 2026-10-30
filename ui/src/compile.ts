@@ -5,7 +5,7 @@ export type Mode = 'light' | 'dark'
 
 export const colourNames = [
   'bg', 'glowA', 'glowB', 'panel', 'panel2', 'ink', 'muted', 'line',
-  'accent', 'onAccent', 'accent2', 'accentSoft',
+  'accent', 'onAccent', 'accent2', 'accentSoft', 'chart',
   'danger', 'dangerSoft', 'warn', 'warnSoft', 'ok', 'okSoft', 'focus',
   'bodyFill', 'bodyLine',
 ] as const

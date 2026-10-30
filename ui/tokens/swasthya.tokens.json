@@ -21,6 +21,7 @@
       ["ink", "bg", 4.5], ["ink", "panel", 4.5], ["ink", "panel2", 4.5],
       ["muted", "panel", 4.5], ["muted", "panel2", 4.5],
       ["accent", "panel", 4.5], ["onAccent", "accent", 4.5], ["accent", "accentSoft", 4.5],
+      ["chart", "panel", 3], ["chart", "panel2", 3],
       ["danger", "dangerSoft", 4.5], ["warn", "warnSoft", 4.5], ["ok", "okSoft", 4.5],
       ["danger", "panel", 4.5], ["warn", "panel", 4.5], ["ok", "panel", 4.5],
       ["focus", "panel", 3], ["line", "panel", 1.15]
@@ -48,7 +49,7 @@
         "light": {
           "bg": "#eef3f0", "glowA": "#eef3f0", "glowB": "#eef3f0",
           "panel": "#ffffff", "panel2": "#f5f8f6", "ink": "#14302a", "muted": "#566c66", "line": "#dce6e1",
-          "accent": "#1f7a6c", "onAccent": "#ffffff", "accent2": "#3f8f81", "accentSoft": "#e6f3ef",
+          "accent": "#1f7a6c", "onAccent": "#ffffff", "accent2": "#3f8f81", "accentSoft": "#e6f3ef", "chart": "#00876f",
           "danger": "#b53a0a", "dangerSoft": "#fde7da", "warn": "#8f5706", "warnSoft": "#fbf0cf",
           "ok": "#14743a", "okSoft": "#dcf3e3", "focus": "#1f7a6c",
           "bodyFill": "#e3eeea", "bodyLine": "#a9c4bb"
@@ -56,7 +57,7 @@
         "dark": {
           "bg": "#0f1a17", "glowA": "#0f1a17", "glowB": "#0f1a17",
           "panel": "#16231f", "panel2": "#1c2c27", "ink": "#e3efeb", "muted": "#9db3ac", "line": "#2a3d37",
-          "accent": "#5cc4b0", "onAccent": "#062520", "accent2": "#8fd3c4", "accentSoft": "#1d3d36",
+          "accent": "#5cc4b0", "onAccent": "#062520", "accent2": "#8fd3c4", "accentSoft": "#1d3d36", "chart": "#2f9e89",
           "danger": "#ff9a70", "dangerSoft": "#3d2116", "warn": "#f0b75a", "warnSoft": "#3a2d12",
           "ok": "#6fd897", "okSoft": "#173826", "focus": "#5cc4b0",
           "bodyFill": "#1f332d", "bodyLine": "#3d5c53"
@@ -84,7 +85,7 @@
         "dark": {
           "bg": "#070b16", "glowA": "#1d2b6b", "glowB": "#0c3b3a",
           "panel": "#121a32", "panel2": "#18213d", "ink": "#e8ecff", "muted": "#99a5cb", "line": "#28325c",
-          "accent": "#8aa6ff", "onAccent": "#0a1030", "accent2": "#3ee6c4", "accentSoft": "#1d2a5c",
+          "accent": "#8aa6ff", "onAccent": "#0a1030", "accent2": "#3ee6c4", "accentSoft": "#1d2a5c", "chart": "#5a7ce8",
           "danger": "#ff7a96", "dangerSoft": "#3a1a26", "warn": "#ffc561", "warnSoft": "#3a2d12",
           "ok": "#3ee6c4", "okSoft": "#12352f", "focus": "#8aa6ff",
           "bodyFill": "#18234a", "bodyLine": "#3a4c8c"
@@ -92,7 +93,7 @@
         "light": {
           "bg": "#f3f5ff", "glowA": "#dfe6ff", "glowB": "#d8f6ef",
           "panel": "#ffffff", "panel2": "#f0f3ff", "ink": "#121a3a", "muted": "#545f8a", "line": "#dfe4f7",
-          "accent": "#3654d6", "onAccent": "#ffffff", "accent2": "#0f9e86", "accentSoft": "#e3e9ff",
+          "accent": "#3654d6", "onAccent": "#ffffff", "accent2": "#0f9e86", "accentSoft": "#e3e9ff", "chart": "#3654d6",
           "danger": "#b92c48", "dangerSoft": "#fde3ea", "warn": "#875600", "warnSoft": "#fdf0d2",
           "ok": "#0b7463", "okSoft": "#d9f4ee", "focus": "#3654d6",
           "bodyFill": "#e6ebff", "bodyLine": "#aab6e8"
@@ -120,7 +121,7 @@
         "light": {
           "bg": "#f6f0e6", "glowA": "#f6f0e6", "glowB": "#f6f0e6",
           "panel": "#fffaf2", "panel2": "#f1e8da", "ink": "#2b2118", "muted": "#6e5d49", "line": "#e3d6c2",
-          "accent": "#a84a22", "onAccent": "#fffaf2", "accent2": "#5b7f5a", "accentSoft": "#f8e6d9",
+          "accent": "#a84a22", "onAccent": "#fffaf2", "accent2": "#5b7f5a", "accentSoft": "#f8e6d9", "chart": "#a84a22",
           "danger": "#a02f27", "dangerSoft": "#f4d9d3", "warn": "#7d560c", "warnSoft": "#f5e8c8",
           "ok": "#466f43", "okSoft": "#e1ecd9", "focus": "#a84a22",
           "bodyFill": "#efe3d0", "bodyLine": "#c7ad8a"
@@ -128,7 +129,7 @@
         "dark": {
           "bg": "#1b1612", "glowA": "#1b1612", "glowB": "#1b1612",
           "panel": "#241d18", "panel2": "#2c241e", "ink": "#f1e6d6", "muted": "#bba892", "line": "#3d332a",
-          "accent": "#e8956a", "onAccent": "#1b1612", "accent2": "#9cbf8f", "accentSoft": "#43291c",
+          "accent": "#e8956a", "onAccent": "#1b1612", "accent2": "#9cbf8f", "accentSoft": "#43291c", "chart": "#c96f43",
           "danger": "#f29488", "dangerSoft": "#45231f", "warn": "#e0b45c", "warnSoft": "#3d3018",
           "ok": "#a3c796", "okSoft": "#26331f", "focus": "#e8956a",
           "bodyFill": "#3a3026", "bodyLine": "#6b5a47"

@@ -34,6 +34,7 @@
   --c-on-accent: #ffffff;
   --c-accent-2: #3f8f81;
   --c-accent-soft: #e6f3ef;
+  --c-chart: #00876f;
   --c-danger: #b53a0a;
   --c-danger-soft: #fde7da;
   --c-warn: #8f5706;
@@ -85,6 +86,7 @@
   --c-on-accent: #ffffff;
   --c-accent-2: #3f8f81;
   --c-accent-soft: #e6f3ef;
+  --c-chart: #00876f;
   --c-danger: #b53a0a;
   --c-danger-soft: #fde7da;
   --c-warn: #8f5706;
@@ -136,6 +138,7 @@
   --c-on-accent: #062520;
   --c-accent-2: #8fd3c4;
   --c-accent-soft: #1d3d36;
+  --c-chart: #2f9e89;
   --c-danger: #ff9a70;
   --c-danger-soft: #3d2116;
   --c-warn: #f0b75a;
@@ -187,6 +190,7 @@
   --c-on-accent: #ffffff;
   --c-accent-2: #0f9e86;
   --c-accent-soft: #e3e9ff;
+  --c-chart: #3654d6;
   --c-danger: #b92c48;
   --c-danger-soft: #fde3ea;
   --c-warn: #875600;
@@ -238,6 +242,7 @@
   --c-on-accent: #0a1030;
   --c-accent-2: #3ee6c4;
   --c-accent-soft: #1d2a5c;
+  --c-chart: #5a7ce8;
   --c-danger: #ff7a96;
   --c-danger-soft: #3a1a26;
   --c-warn: #ffc561;
@@ -289,6 +294,7 @@
   --c-on-accent: #fffaf2;
   --c-accent-2: #5b7f5a;
   --c-accent-soft: #f8e6d9;
+  --c-chart: #a84a22;
   --c-danger: #a02f27;
   --c-danger-soft: #f4d9d3;
   --c-warn: #7d560c;
@@ -340,6 +346,7 @@
   --c-on-accent: #1b1612;
   --c-accent-2: #9cbf8f;
   --c-accent-soft: #43291c;
+  --c-chart: #c96f43;
   --c-danger: #f29488;
   --c-danger-soft: #45231f;
   --c-warn: #e0b45c;
