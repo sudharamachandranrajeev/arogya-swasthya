@@ -8,12 +8,17 @@
 // Each region in app/src/lib/model/anatomy.json becomes one named node: every part file that makes up its FMA
 // concept, merged, simplified and compressed with meshoptimizer. Positions are in metres, Y up,
 // the body facing +Z, feet at Y = 0.
+//
+// BodyParts3D has no surface for lung tissue, only the airways and vessels inside it. Regions
+// marked "hull" are drawn as the convex hull of their parts, which follows the lung's outline.
 import fs from 'node:fs'
 import path from 'node:path'
 import { Document, NodeIO } from '@gltf-transform/core'
 import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions'
 import { meshopt, quantize, reorder, simplify, weld } from '@gltf-transform/functions'
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
+import { Vector3 } from 'three'
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js'
 
 const here = path.dirname(new URL(import.meta.url).pathname)
 const OUT = path.join(here, '../../app/public/anatomy/body.glb')
@@ -54,6 +59,17 @@ function readObj(file, pos, idx) {
   }
 }
 
+/** Replace the parts with their convex hull, in place. */
+function hull(pos, idx) {
+  const points = []
+  for (let i = 0; i < pos.length; i += 3) points.push(new Vector3(pos[i], pos[i + 1], pos[i + 2]))
+  const g = new ConvexGeometry(points)
+  pos.length = 0
+  idx.length = 0
+  pos.push(...g.getAttribute('position').array)
+  for (let i = 0; i < pos.length / 3; i++) idx.push(i)
+}
+
 const doc = new Document()
 doc.getRoot().getAsset().copyright =
   'Derived from BodyParts3D, © The Database Center for Life Science, licensed under CC BY 4.0 (files marked CC BY-SA 2.1 JP). This model: CC BY-SA 4.0.'
@@ -67,6 +83,7 @@ for (const [id, r] of Object.entries(regions)) {
   const pos = []
   const idx = []
   for (const f of files) readObj(path.join(objDir, `${f}.obj`), pos, idx)
+  if (r.hull) hull(pos, idx)
   for (let i = 1; i < pos.length; i += 3) floor = Math.min(floor, pos[i])
   built.push({ id, r, pos, idx })
 }

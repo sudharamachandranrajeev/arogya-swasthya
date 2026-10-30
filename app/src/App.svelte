@@ -19,6 +19,7 @@
   import SearchIcon from '@lucide/svelte/icons/search'
   import Stethoscope from '@lucide/svelte/icons/stethoscope'
   import SettingsIcon from '@lucide/svelte/icons/settings'
+  import Body from './lib/Body.svelte'
   import Calculators from './lib/Calculators.svelte'
   import Documents from './lib/Documents.svelte'
   import Doses from './lib/Doses.svelte'
@@ -62,7 +63,6 @@
     { id: 'appearance', label: 'Appearance', icon: Palette },
   ]
   const later: Record<string, string> = {
-    body: 'A 3D body that lights up where your conditions, procedures and photos belong.',
     care: 'Finding care near you, with every source checked and shown.',
     exercise: 'Exercise plans that respect your injuries and conditions.',
     photos: 'Body photo series with consistent light and angle checks.',
@@ -140,6 +140,10 @@
           <h1>Trends</h1>
           <p class="lead">How {session.personName}'s readings change over time. A change is worth talking over with a clinician, not a diagnosis.</p>
           <Trends />
+        {:else if page === 'body'}
+          <h1>Body</h1>
+          <p class="lead">Where {session.personName}'s conditions and operations are. Drag to turn, pinch or scroll to zoom, tap a part to see its records.</p>
+          <Body />
         {:else if page === 'calc'}
           <h1>Calculators</h1>
           <p class="lead">Worked out on this device from {session.personName}'s newest records. Change any number to try another. These are screening numbers, not a diagnosis.</p>
