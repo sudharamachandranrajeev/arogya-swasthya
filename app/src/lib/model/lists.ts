@@ -40,4 +40,8 @@ export const lists = {
     'Right shoulder', 'Left arm', 'Right arm', 'Left hand', 'Right hand', 'Left hip', 'Right hip', 'Left knee',
     'Right knee', 'Left foot', 'Right foot', 'Skin',
   ],
+  documents: [
+    'Clinic letter', 'Discharge summary', 'Lab report', 'Scan or X-ray report', 'Prescription', 'Referral',
+    'Vaccination card', 'Insurance document', 'Photo', 'Recording', 'Other',
+  ],
 } as const

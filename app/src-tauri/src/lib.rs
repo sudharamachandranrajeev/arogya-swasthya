@@ -3,6 +3,7 @@
 //! on phones), keeps daily backups, and answers the UI's commands.
 
 mod data;
+mod docs;
 mod update;
 
 use std::path::{Path, PathBuf};
@@ -109,10 +110,19 @@ impl App {
             return;
         };
         let _ = store.daily_backup(&self.dir.join(BACKUP_DIR), key, now);
+        let vault = self.dir.join(docs::FILES_DIR);
         if let Some(folder) = get::<String>(store, "backup.folder") {
             let _ = store.daily_backup(Path::new(&folder), key, now);
+            // Documents are not inside the database: copy any new ones too.
+            let copies = Path::new(&folder).join(docs::FILES_DIR);
+            for id in store.file_ids().unwrap_or_default() {
+                let _ = swasthya_core::files::mirror(&vault, &copies, &id);
+            }
         }
         let _ = store.purge(now);
+        for id in store.drop_stale_files(now).unwrap_or_default() {
+            let _ = swasthya_core::files::remove(&vault, &id);
+        }
     }
 }
 
@@ -467,6 +477,9 @@ pub fn run() {
             data::pick_backup,
             data::inspect_backup,
             data::restore_backup,
+            docs::add_document,
+            docs::document_bytes,
+            docs::save_document_to,
             update::update_status,
             update::set_update_mode,
             update::open_page,

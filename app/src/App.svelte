@@ -4,6 +4,7 @@
   import Camera from '@lucide/svelte/icons/camera'
   import Dumbbell from '@lucide/svelte/icons/dumbbell'
   import FileText from '@lucide/svelte/icons/file-text'
+  import FolderOpen from '@lucide/svelte/icons/folder-open'
   import History from '@lucide/svelte/icons/history'
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard'
   import ListChecks from '@lucide/svelte/icons/list-checks'
@@ -12,6 +13,7 @@
   import PersonStanding from '@lucide/svelte/icons/person-standing'
   import PillIcon from '@lucide/svelte/icons/pill'
   import SettingsIcon from '@lucide/svelte/icons/settings'
+  import Documents from './lib/Documents.svelte'
   import Home from './lib/Home.svelte'
   import Lock from './lib/Lock.svelte'
   import { allergy, condition, medication, procedure, result, vaccine } from './lib/model/fhir.ts'
@@ -30,6 +32,7 @@
     { id: 'records', label: 'Records', icon: FileText },
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
     { id: 'results', label: 'Results', icon: Activity },
+    { id: 'documents', label: 'Documents', icon: FolderOpen },
     { id: 'timeline', label: 'Timeline', icon: History },
     { id: 'body', label: 'Body', icon: PersonStanding },
     { id: 'care', label: 'Find care', icon: MapPin },
@@ -106,6 +109,10 @@
           <h1>Results</h1>
           <p class="lead">Test results with the lab's normal range. Outside the range is not always a problem: ask the person who ordered the test.</p>
           <RecordList kind={result} />
+        {:else if page === 'documents'}
+          <h1>Documents</h1>
+          <p class="lead">{session.personName}'s letters, reports, scans, photos and recordings, encrypted on this device.</p>
+          <Documents />
         {:else if page === 'timeline'}
           <h1>Timeline</h1>
           <p class="lead">Everything in {session.personName}'s record, newest first.</p>

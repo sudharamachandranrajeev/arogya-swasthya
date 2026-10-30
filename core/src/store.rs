@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::fhir::{self, Invalid};
+use crate::files::Sealed;
 use crate::keys::Key;
 
 /// Days a deleted record stays restorable.
@@ -63,7 +64,8 @@ pub struct Summary {
 
 /// Schema steps; index + 1 is the version they lead to. Never edit a step
 /// that has shipped: add a new one.
-const MIGRATIONS: &[&str] = &["
+const MIGRATIONS: &[&str] = &[
+    "
     CREATE TABLE records (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -86,7 +88,33 @@ const MIGRATIONS: &[&str] = &["
         at INTEGER NOT NULL
     );
     CREATE TABLE kv (key TEXT PRIMARY KEY, json TEXT NOT NULL);
-"];
+",
+    "
+    CREATE TABLE files (
+        id TEXT PRIMARY KEY,
+        key BLOB NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        added_at INTEGER NOT NULL
+    );
+",
+];
+
+/// How a DocumentReference points at its file in the vault.
+pub const FILE_URL: &str = "swasthya-file:";
+
+/// A file kept in the vault, as the database knows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileRow {
+    pub id: String,
+    pub key: Key,
+    pub size: u64,
+    pub sha256: String,
+    pub content_type: String,
+    pub name: String,
+}
 
 pub struct Store {
     conn: Connection,
@@ -334,6 +362,91 @@ impl Store {
         tx.execute("DELETE FROM history WHERE group_id = ?", [group])?;
         tx.commit()?;
         Ok(Some(Undone { label }))
+    }
+
+    /// Save a DocumentReference for a file just sealed into the vault. The
+    /// resource gets the attachment (type, name, size, vault link) and today
+    /// as its `date`.
+    pub fn add_document(
+        &mut self,
+        mut doc: Value,
+        file: &Sealed,
+        content_type: &str,
+        name: &str,
+        now: Timestamp,
+    ) -> Result<Value> {
+        if fhir::resource_type(&doc)? != "DocumentReference" {
+            return Err(Invalid::Unsupported("Only a DocumentReference".into()).into());
+        }
+        doc["status"] = json!("current");
+        doc["date"] = json!(now.to_string());
+        doc["content"] = json!([{ "attachment": {
+            "contentType": content_type,
+            "url": format!("{FILE_URL}{}", file.id),
+            "size": file.size,
+            "title": name,
+        }}]);
+        self.conn.execute(
+            "INSERT INTO files (id, key, size, sha256, content_type, name, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            params![file.id, file.key.as_slice(), file.size as i64, file.sha256, content_type, name, now.as_second()],
+        )?;
+        self.save(doc, now).inspect_err(|_| {
+            let _ = self
+                .conn
+                .execute("DELETE FROM files WHERE id = ?", [&file.id]);
+        })
+    }
+
+    /// The vault entry for a file id.
+    pub fn file(&self, id: &str) -> Result<FileRow> {
+        self.conn
+            .query_row(
+                "SELECT id, key, size, sha256, content_type, name FROM files WHERE id = ?",
+                [id],
+                |r| {
+                    let key: Vec<u8> = r.get(1)?;
+                    Ok(FileRow {
+                        id: r.get(0)?,
+                        key: key.try_into().unwrap_or([0; 32]),
+                        size: r.get::<_, i64>(2)? as u64,
+                        sha256: r.get(3)?,
+                        content_type: r.get(4)?,
+                        name: r.get(5)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| Error::NotFound(id.into()))
+    }
+
+    /// Every file id the database knows (to copy them next to a backup).
+    pub fn file_ids(&self) -> Result<Vec<String>> {
+        let mut st = self.conn.prepare("SELECT id FROM files ORDER BY id")?;
+        Ok(st
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Forget files no record or undo step mentions any more, once they are
+    /// older than [`TRASH_DAYS`]. Returns their ids, for removal from the
+    /// vault. (A file whose record was undone or purged ends here.)
+    pub fn drop_stale_files(&mut self, now: Timestamp) -> Result<Vec<String>> {
+        let cut = (now - SignedDuration::from_hours(24 * TRASH_DAYS)).as_second();
+        let tx = self.conn.transaction()?;
+        let ids: Vec<String> = {
+            let mut st = tx.prepare(
+                "SELECT f.id FROM files f WHERE f.added_at < ?1
+                   AND NOT EXISTS (SELECT 1 FROM records WHERE instr(json, ?2 || f.id) > 0)
+                   AND NOT EXISTS (SELECT 1 FROM history WHERE instr(before_json, ?2 || f.id) > 0)",
+            )?;
+            st.query_map(params![cut, FILE_URL], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?
+        };
+        for id in &ids {
+            tx.execute("DELETE FROM files WHERE id = ?", [id])?;
+        }
+        tx.commit()?;
+        Ok(ids)
     }
 
     /// Remove trash and undo history older than [`TRASH_DAYS`].
@@ -657,6 +770,7 @@ fn describe(r: &Value) -> String {
     let text = ["code", "vaccineCode", "medicationCodeableConcept"]
         .iter()
         .find_map(|f| r[f]["text"].as_str().map(String::from))
+        .or_else(|| r["description"].as_str().map(String::from))
         .or_else(|| r["name"][0]["text"].as_str().map(String::from));
     match text {
         Some(t) => format!("{kind} “{t}”"),
@@ -942,5 +1056,49 @@ mod tests {
         s.conn.pragma_update(None, "user_version", 99).unwrap();
         drop(s);
         assert!(matches!(Store::open(&db, &KEY), Err(Error::TooNew(99))));
+    }
+
+    #[test]
+    fn documents_keep_their_file_until_purged_and_stale() {
+        let vault = tempfile::tempdir().unwrap();
+        let mut s = Store::memory().unwrap();
+        let who = person(&mut s, "Test Person");
+        let sealed = crate::files::seal(vault.path(), &b"synthetic letter"[..]).unwrap();
+        let doc = json!({"resourceType": "DocumentReference", "subject": {"reference": format!("Patient/{who}")},
+                         "description": "Clinic letter", "context": {"period": {"start": "2026-10-01"}}});
+        let saved = s
+            .add_document(doc, &sealed, "text/plain", "letter.txt", at(NOW))
+            .unwrap();
+        let url = format!("{FILE_URL}{}", sealed.id);
+        assert_eq!(saved["content"][0]["attachment"]["url"], url.as_str());
+        assert_eq!(s.timeline(&who).unwrap()[0]["id"], saved["id"]);
+        let row = s.file(&sealed.id).unwrap();
+        assert_eq!(
+            (row.key, row.size, row.name.as_str()),
+            (sealed.key, 16, "letter.txt")
+        );
+        assert_eq!(
+            crate::files::read(vault.path(), &row.id, &row.key).unwrap(),
+            b"synthetic letter"
+        );
+
+        // In use, or in the trash: kept, however old.
+        let later = at("2027-06-01T00:00:00Z");
+        assert!(s.drop_stale_files(later).unwrap().is_empty());
+        s.delete(saved["id"].as_str().unwrap(), at(NOW)).unwrap();
+        assert!(s.drop_stale_files(later).unwrap().is_empty());
+        // Purged from the trash and out of the undo history: dropped.
+        s.purge(later).unwrap();
+        assert_eq!(s.drop_stale_files(later).unwrap(), vec![sealed.id.clone()]);
+        assert!(matches!(s.file(&sealed.id), Err(Error::NotFound(_))));
+
+        // A failed save leaves no file row behind.
+        let other = crate::files::seal(vault.path(), &b"x"[..]).unwrap();
+        let orphan = json!({"resourceType": "DocumentReference", "subject": {"reference": "Patient/nobody"}});
+        assert!(
+            s.add_document(orphan, &other, "text/plain", "x.txt", at(NOW))
+                .is_err()
+        );
+        assert!(s.file_ids().unwrap().is_empty());
     }
 }

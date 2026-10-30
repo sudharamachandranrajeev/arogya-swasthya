@@ -1,4 +1,4 @@
-//! The FHIR R4 resources phase 1 keeps, and the few fields the store indexes.
+//! The FHIR R4 resources the store keeps, and the few fields the store indexes.
 //! Resources stay as JSON; only the person they belong to and a sort date are
 //! pulled out into columns.
 
@@ -14,6 +14,7 @@ const KINDS: &[(&str, &str)] = &[
     ("Immunization", "patient"),
     ("Observation", "subject"),
     ("DiagnosticReport", "subject"),
+    ("DocumentReference", "subject"),
 ];
 
 /// Where each type keeps the date that orders it on the timeline, first match wins.
@@ -37,6 +38,7 @@ const DATES: &[(&str, &[&str])] = &[
         "DiagnosticReport",
         &["effectiveDateTime", "effectivePeriod.start", "issued"],
     ),
+    ("DocumentReference", &["context.period.start", "date"]),
 ];
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

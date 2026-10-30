@@ -18,7 +18,7 @@
       session.fail.bind(session),
     )
   })
-  const pages: Record<string, string> = { MedicationStatement: 'medicines', Observation: 'results' }
+  const pages: Record<string, string> = { MedicationStatement: 'medicines', Observation: 'results', DocumentReference: 'documents' }
 </script>
 
 <h1>{session.personName || 'Overview'}</h1>

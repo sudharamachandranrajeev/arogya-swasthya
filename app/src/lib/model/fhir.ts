@@ -1,4 +1,4 @@
-// The record kinds phase 1 lets people type in, and how each maps to FHIR R4.
+// The record kinds people can type in, and how each maps to FHIR R4.
 // Forms work on flat string values; editing starts from the stored resource so
 // fields this app does not show (from an import, say) are kept as they were.
 
@@ -263,7 +263,39 @@ export const result: Kind = {
   },
 }
 
-export const kinds = [condition, medication, allergy, procedure, vaccine, result]
+export const document: Kind = {
+  type: 'DocumentReference',
+  title: 'Documents',
+  one: 'a document',
+  explain: 'Letters, reports, scans, photos and recordings. Each file is encrypted and kept on this device with the records.',
+  personField: 'subject',
+  base: { status: 'current' },
+  fields: [
+    { key: 'title', label: 'What it is', type: 'text', path: 'description', required: true, explain: 'A few words you will recognise later, such as "Knee MRI report".' },
+    { key: 'kind', label: 'Kind of document', type: 'text', path: 'type.text', list: lists.documents },
+    { key: 'date', label: 'Date on the document', type: 'date', path: 'context.period.start' },
+    { key: 'from', label: 'From', type: 'text', path: 'author.0.display', explain: 'Who wrote or made it: a doctor, clinic or lab.' },
+  ],
+  summary: (r) => ({
+    title: text(r, 'description') || text(r, 'content.0.attachment.title'),
+    sub: join(text(r, 'type.text'), text(r, 'author.0.display'), text(r, 'content.0.attachment.title')),
+    date: text(r, 'context.period.start'),
+  }),
+}
+
+/** The vault file a document points at, if any. */
+export function attachment(r: Resource) {
+  const url = text(r, 'content.0.attachment.url')
+  if (!url.startsWith('swasthya-file:')) return null
+  return {
+    id: url.slice('swasthya-file:'.length),
+    name: text(r, 'content.0.attachment.title') || 'document',
+    type: text(r, 'content.0.attachment.contentType'),
+    size: Number(getPath(r, 'content.0.attachment.size') ?? 0),
+  }
+}
+
+export const kinds = [condition, medication, allergy, procedure, vaccine, result, document]
 export const kindOf = (type: string) => [patient, ...kinds].find((k) => k.type === type)
 
 // ---- results ----

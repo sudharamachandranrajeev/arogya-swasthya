@@ -95,6 +95,10 @@ export interface Api {
   backupNow(): Promise<string>
   saveBackupTo(target: string): Promise<void>
   pickBackup(): Promise<string | null>
+  /** Ask for a file, encrypt it and save `doc` pointing at it. Null when cancelled. */
+  addDocument(doc: Resource): Promise<Resource | null>
+  documentBytes(id: string): Promise<ArrayBuffer>
+  saveDocumentTo(id: string, target: string): Promise<void>
   inspectBackup(name: string | null, recovery: string | null): Promise<BackupSummary>
   restoreBackup(name: string | null, recovery: string | null): Promise<string>
   updateStatus(): Promise<UpdateStatus>
@@ -132,6 +136,9 @@ const tauri: Api = {
   backupNow: () => invoke('backup_now'),
   saveBackupTo: (target) => invoke('save_backup_to', { target }),
   pickBackup: () => invoke('pick_backup'),
+  addDocument: (doc) => invoke('add_document', { doc }),
+  documentBytes: (id) => invoke('document_bytes', { id }),
+  saveDocumentTo: (id, target) => invoke('save_document_to', { id, target }),
   inspectBackup: (name, recovery) => invoke('inspect_backup', { name, recovery }),
   restoreBackup: (name, recovery) => invoke('restore_backup', { name, recovery }),
   updateStatus: () => invoke('update_status'),
@@ -204,6 +211,9 @@ function memory(): Api {
     backupNow: async () => { throw 'The browser preview cannot write backups.' },
     saveBackupTo: async () => { throw 'The browser preview cannot write backups.' },
     pickBackup: async () => { throw 'The browser preview has no backups to restore.' },
+    addDocument: async () => { throw 'The browser preview cannot keep files.' },
+    documentBytes: async () => { throw 'The browser preview cannot keep files.' },
+    saveDocumentTo: async () => { throw 'The browser preview cannot keep files.' },
     inspectBackup: async () => { throw 'The browser preview has no backups to restore.' },
     restoreBackup: async () => { throw 'The browser preview has no backups to restore.' },
     updateStatus: async () => ({ kind: 'other', canInstall: false, current: 'preview', previous: null, mode: (settings.get('updates.mode') as UpdateMode) ?? 'ask' }),

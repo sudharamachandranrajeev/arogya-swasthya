@@ -233,6 +233,7 @@
     {#if backups}
       <p><strong>On this device:</strong> {backups.files.length} backup{backups.files.length === 1 ? '' : 's'}{backups.files[0] ? `, newest ${when(backups.files[0].name)}` : ''}.</p>
       <p class="muted small">{backups.folder}</p>
+      <p class="muted small">Documents are encrypted files kept beside the records, not inside these backups. They are copied to the second folder as well. “Save a backup as…” saves the records only.</p>
       {#if !phone}
         <p><strong>Second copy:</strong> {backups.userFolder ? `${backups.userFolder} (${backups.userFiles.length} backups)` : 'none'}</p>
       {/if}
