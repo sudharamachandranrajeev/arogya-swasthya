@@ -2,7 +2,7 @@
   // One person's documents: add a file with a few words about it, look at it
   // inside the app, save a copy out, edit what it is, delete (with Undo).
   import { Button, Card, Explain, Row } from '@swasthya/ui'
-  import { api, inApp, type OcrStatus } from './api.ts'
+  import { api, inApp, type TextStatus } from './api.ts'
   import DateField from './DateField.svelte'
   import { attachment, check, document, toFhir, type Resource, type Values } from './model/fhir.ts'
   import RecordForm from './RecordForm.svelte'
@@ -22,29 +22,38 @@
     api.records(person, document.type).then((r) => (rows = r), session.fail.bind(session))
   })
 
-  // ---- reading photos and scans (OCR) ----
-  let ocr = $state<OcrStatus | null>(null)
-  let fetching = $state(false)
+  // ---- reading photos and scans (OCR) and transcribing recordings ----
+  let status = $state<TextStatus | null>(null)
+  let fetching = $state<'ocr' | 'transcribe' | null>(null)
+  const refresh = () => api.textStatus().then((s) => (status = s), () => {})
   $effect(() => {
     void session.version
-    api.ocrStatus().then((s) => (ocr = s), () => {})
+    refresh()
   })
   // While documents are being read, check again every few seconds.
   $effect(() => {
-    if (ocr?.mode !== 'on' || !ocr.waiting) return
-    const t = setTimeout(() => api.ocrStatus().then((s) => (ocr = s), () => {}), 3000)
+    if (!status?.waiting) return
+    const t = setTimeout(refresh, 3000)
     return () => clearTimeout(t)
   })
-  async function setOcr(on: boolean) {
-    fetching = on
+  const isRecording = (r: Resource) => /^(audio|video)\//.test(attachment(r)?.type ?? '')
+  let hasRecordings = $derived(rows.some(isRecording))
+  async function turn(what: 'ocr' | 'transcribe', on: boolean) {
+    fetching = on ? what : null
     try {
-      await api.setOcr(on)
-      ocr = await api.ocrStatus()
-      if (on) session.say({ text: 'Reading photos and scans is on. Their words appear in Search as they are read.' })
+      await (what === 'ocr' ? api.setOcr(on) : api.setTranscribe(on))
+      await refresh()
+      if (on)
+        session.say({
+          text:
+            what === 'ocr'
+              ? 'Reading photos and scans is on. Their words appear in Search as they are read.'
+              : 'Transcripts are on. Words spoken in recordings appear in Search once they are transcribed.',
+        })
     } catch (e) {
       session.fail(e)
     } finally {
-      fetching = false
+      fetching = null
     }
   }
 
@@ -187,21 +196,36 @@
   {/if}
 </Card>
 
-{#if ocr && rows.length && !adding && !editing}
+{#if status && rows.length && !adding && !editing}
   <div class="gap"></div>
-  {#if ocr.mode === null}
+  {#if status.ocr === null}
     <Card title="Find documents by their words?">
       <p>The app can read the words in photos and scanned letters, so Search finds them. It reads on this device: your documents are never sent anywhere.</p>
       <p class="muted small">This needs a reading model, downloaded once (about 12 MB) from the <a href="https://github.com/robertknight/ocrs" target="_blank" rel="noreferrer">ocrs</a> project. Latin-alphabet languages only for now. PDFs with their own text are searchable either way.</p>
       <div class="actions">
-        <Button disabled={fetching} onclick={() => setOcr(true)}>{fetching ? 'Downloading…' : 'Yes, download it'}</Button>
-        <Button variant="ghost" disabled={fetching} onclick={() => setOcr(false)}>Not now</Button>
+        <Button disabled={!!fetching} onclick={() => turn('ocr', true)}>{fetching === 'ocr' ? 'Downloading…' : 'Yes, download it'}</Button>
+        <Button variant="ghost" disabled={!!fetching} onclick={() => turn('ocr', false)}>Not now</Button>
       </div>
     </Card>
-  {:else if ocr.mode === 'off'}
-    <p class="muted small">Words in photos and scans are not read, so Search cannot find them. <button class="link" disabled={fetching} onclick={() => setOcr(true)}>{fetching ? 'Downloading the reading model…' : 'Read them (downloads 12 MB once)'}</button></p>
-  {:else if ocr.waiting > 0}
-    <p class="muted small">Reading the words in {ocr.waiting} document{ocr.waiting === 1 ? '' : 's'} for Search…</p>
+  {:else if status.canTranscribe && hasRecordings && status.transcribe === null}
+    <Card title="Find recordings by what is said?">
+      <p>The app can write down the words spoken in recordings and videos, so Search finds them. It listens on this device: your recordings are never sent anywhere.</p>
+      <p class="muted small">This needs a speech model, downloaded once (about 60 MB) from the <a href="https://github.com/ggml-org/whisper.cpp" target="_blank" rel="noreferrer">whisper.cpp</a> project. It knows many languages. Only the first 30 minutes of each recording are transcribed.</p>
+      <div class="actions">
+        <Button disabled={!!fetching} onclick={() => turn('transcribe', true)}>{fetching === 'transcribe' ? 'Downloading…' : 'Yes, download it'}</Button>
+        <Button variant="ghost" disabled={!!fetching} onclick={() => turn('transcribe', false)}>Not now</Button>
+      </div>
+    </Card>
+  {:else}
+    {#if status.ocr === 'off'}
+      <p class="muted small">Words in photos and scans are not read, so Search cannot find them. <button class="link" disabled={!!fetching} onclick={() => turn('ocr', true)}>{fetching === 'ocr' ? 'Downloading the reading model…' : 'Read them (downloads 12 MB once)'}</button></p>
+    {/if}
+    {#if status.canTranscribe && hasRecordings && status.transcribe === 'off'}
+      <p class="muted small">Recordings are not transcribed, so Search cannot find what is said in them. <button class="link" disabled={!!fetching} onclick={() => turn('transcribe', true)}>{fetching === 'transcribe' ? 'Downloading the speech model…' : 'Transcribe them (downloads 60 MB once)'}</button></p>
+    {/if}
+    {#if status.waiting > 0}
+      <p class="muted small">Reading the words in {status.waiting} document{status.waiting === 1 ? '' : 's'} for Search…</p>
+    {/if}
   {/if}
 {/if}
 

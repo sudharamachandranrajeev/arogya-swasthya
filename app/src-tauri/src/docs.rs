@@ -138,6 +138,8 @@ fn content_type(name: &str) -> &'static str {
         "m4a" => "audio/mp4",
         "wav" => "audio/wav",
         "ogg" | "oga" => "audio/ogg",
+        "flac" => "audio/flac",
+        "aac" => "audio/aac",
         "mp4" | "m4v" => "video/mp4",
         "mov" => "video/quicktime",
         "webm" => "video/webm",

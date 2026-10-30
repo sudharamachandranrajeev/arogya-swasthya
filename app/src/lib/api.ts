@@ -106,9 +106,15 @@ export interface LinkInfo {
   direct: boolean
 }
 
-export interface OcrStatus {
+type Choice = 'on' | 'off' | null
+
+export interface TextStatus {
   /** Reading photos and scans: on, off, or not chosen yet. */
-  mode: 'on' | 'off' | null
+  ocr: Choice
+  /** Transcribing recordings, the same way. */
+  transcribe: Choice
+  /** This device can transcribe (desktop, for now). */
+  canTranscribe: boolean
   /** Documents whose words are not read yet. */
   waiting: number
 }
@@ -135,9 +141,11 @@ export interface Api {
   /** Ask for a file, encrypt it and save `doc` pointing at it. Null when cancelled. */
   addDocument(doc: Resource): Promise<Resource | null>
   documentBytes(id: string): Promise<ArrayBuffer>
-  ocrStatus(): Promise<OcrStatus>
+  textStatus(): Promise<TextStatus>
   /** On downloads the reading models first (about 12 MB, once). */
   setOcr(on: boolean): Promise<void>
+  /** Turn transcripts of recordings on (downloading the model) or off. */
+  setTranscribe(on: boolean): Promise<void>
   saveDocumentTo(id: string, target: string): Promise<void>
   /** Ask for a FHIR JSON or C-CDA file and read it into a review list. Null when cancelled. */
   importPick(person: string): Promise<Pending | null>
@@ -189,8 +197,9 @@ const tauri: Api = {
   pickBackup: () => invoke('pick_backup'),
   addDocument: (doc) => invoke('add_document', { doc }),
   documentBytes: (id) => invoke('document_bytes', { id }),
-  ocrStatus: () => invoke('ocr_status'),
+  textStatus: () => invoke('text_status'),
   setOcr: (on) => invoke('set_ocr', { on }),
+  setTranscribe: (on) => invoke('set_transcribe', { on }),
   saveDocumentTo: (id, target) => invoke('save_document_to', { id, target }),
   importPick: (person) => invoke('import_pick', { person }),
   importPending: () => invoke('import_pending'),
@@ -273,8 +282,14 @@ function memory(): Api {
     pickBackup: async () => { throw 'The browser preview has no backups to restore.' },
     addDocument: async () => { throw 'The browser preview cannot keep files.' },
     documentBytes: async () => { throw 'The browser preview cannot keep files.' },
-    ocrStatus: async () => ({ mode: (settings.get('ocr.mode') as OcrStatus['mode']) ?? null, waiting: 0 }),
+    textStatus: async () => ({
+      ocr: (settings.get('ocr.mode') as Choice) ?? null,
+      transcribe: (settings.get('transcribe.mode') as Choice) ?? null,
+      canTranscribe: true,
+      waiting: 0,
+    }),
     setOcr: async (on) => void settings.set('ocr.mode', on ? 'on' : 'off'),
+    setTranscribe: async (on) => void settings.set('transcribe.mode', on ? 'on' : 'off'),
     saveDocumentTo: async () => { throw 'The browser preview cannot keep files.' },
     // The preview has no file dialog: "choosing a file" gives a made-up sample.
     importPick: async (person) => {

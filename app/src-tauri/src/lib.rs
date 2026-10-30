@@ -6,6 +6,8 @@ mod data;
 mod docs;
 mod import;
 mod text;
+#[cfg(desktop)]
+mod transcribe;
 mod update;
 
 use std::path::{Path, PathBuf};
@@ -499,8 +501,9 @@ pub fn run() {
             import::import_discard,
             import::link_info,
             import::import_link,
-            text::ocr_status,
+            text::text_status,
             text::set_ocr,
+            text::set_transcribe,
             update::update_status,
             update::set_update_mode,
             update::open_page,
