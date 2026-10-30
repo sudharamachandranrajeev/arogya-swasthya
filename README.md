@@ -9,7 +9,7 @@
 <h4 align="center">Keep your health records, and your family's, private and in one place for life.</h4>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-early%20development-b5562f" alt="Early development">
+  <img src="https://img.shields.io/badge/status-alpha-b5562f" alt="Alpha">
   <img src="https://img.shields.io/badge/works%20on-Linux%20%7C%20Windows%20%7C%20Android-555" alt="Works on Linux, Windows and Android">
   <img src="https://img.shields.io/badge/license-MIT-2e7d32" alt="MIT licence">
 </p>
@@ -29,8 +29,8 @@
 *Ārogya svāsthya* is Sanskrit for "freedom from illness, being well in oneself". This app is for
 anyone who wants their own copy of their medical history: conditions, medicines, allergies,
 procedures, vaccines and test results, for themselves and for the people they look after.
-Status: **early development**. There is no download yet, and the records screens are the first
-part to be built.
+Status: **alpha**. The records screens, backups and updates work; the features listed under
+"Coming in later versions" do not exist yet.
 
 ## ✨ What it does
 
@@ -47,7 +47,9 @@ part to be built.
 - 🔒 **Encrypted, on your device only** – nothing is sent anywhere. A PIN, fingerprint or face
   can lock the app.
 - 💾 **Daily backups and a 30-day trash** – a deleted record can come back, and **Undo** fixes
-  a slip at once.
+  a slip at once. Before restoring a backup, the app shows what it holds.
+- 🔄 **Safe updates** – the app asks before updating, backs up your records first, and can go
+  back to the version before.
 - 🎨 **Three looks, light or dark** – Sage, Aurora and Journal, a calm mode with less motion,
   or make your own.
 
@@ -85,10 +87,30 @@ All screenshots use made-up demo data.
 
 ## 🚀 Get started
 
-> [!NOTE]
-> There is no release yet. Installers for Windows, Linux and Android will be on the
-> [releases page](https://github.com/sudharamachandranrajeev/arogya-swasthya/releases) when the
-> first version is ready. Until then, you can [build it yourself](#%EF%B8%8F-for-developers).
+Download from the
+[latest release](https://github.com/sudharamachandranrajeev/arogya-swasthya/releases/latest).
+Pick the file for your device:
+
+| Device | File | How to install |
+| --- | --- | --- |
+| Windows 10 or 11 | `Arogya.Swasthya_<version>_x64-setup.exe` | Run it. No admin rights needed. |
+| Windows, no install | `ArogyaSwasthya_<version>_x64_portable.zip` | Unzip anywhere and run `arogya-swasthya.exe`. |
+| Linux (most) | `Arogya.Swasthya_<version>_amd64.AppImage` | Make it executable (`chmod +x`), then run it. |
+| Arch Linux | `arogya-swasthya-<version>-1-x86_64.pkg.tar.zst` | `sudo pacman -U` the file. |
+| Android 7 or later | `ArogyaSwasthya_<version>_aarch64.apk` | Open it on the phone and allow installing from your browser or files app. |
+
+Windows may say the program is from an unknown publisher: choose **More info**, then
+**Run anyway**. The program is not signed with a paid Windows certificate.
+
+**Check the download (optional).** Each release has a `SHA256SUMS.txt` file. Compare its line
+for your file with the result of:
+
+```bash
+sha256sum Arogya.Swasthya_0.1.0_amd64.AppImage      # Linux
+certutil -hashfile Arogya.Swasthya_0.1.0_x64-setup.exe SHA256   # Windows
+```
+
+If the two do not match, do not run the file: download it again.
 
 The first time you open the app, a short setup (about two minutes) asks you to:
 
@@ -100,7 +122,8 @@ The first time you open the app, a short setup (about two minutes) asks you to:
 4. **Set a PIN** (optional). On a phone you can also use your fingerprint or face.
 5. **Choose a backup folder** (optional, on a computer). A USB drive or a synced cloud folder
    keeps a second copy safe.
-6. **Add the first person.** Usually you.
+6. **Choose whether to check for new versions.** The app asks before installing anything.
+7. **Add the first person.** Usually you.
 
 ## 🧭 How it works
 
@@ -117,15 +140,17 @@ flowchart LR
   and from other health systems later.
 - The file is encrypted with a random key. Your computer's keyring or your phone's secure
   keystore holds that key. The recovery key is your own copy of it.
-- Nothing leaves the device. Later versions will ask before sending anything, and show you what
-  they would send.
+- Your records never leave the device. The only thing the app sends is the update check, which
+  you can turn off.
 
 ## 🔒 Your data
 
 - **Where it lives:** in the app's own folder on your device, encrypted. Only your account can
   open that folder.
-- **What leaves the device:** nothing.
+- **What leaves the device:** no records, ever. If you allow it, the app asks GitHub once at
+  start whether a new version is out (GitHub sees your internet address, nothing else).
 - **Backups:** one a day, the newest 14 kept, in the app's folder and in your chosen folder.
+  One more before each update (the newest 3 kept) and before each restore.
   **Settings → Backups → Save a backup as…** saves one anywhere you like.
 - **Deleting:** deleted records go to **Settings → Trash** for 30 days, then are removed for
   good. Deleting a person moves all their records too.
@@ -155,6 +180,49 @@ write it down again. If the device itself is lost, the records cannot be opened 
 
 No. It keeps your records and shows whether a result is inside the range the lab printed.
 Outside the range is not always a problem: ask the person who ordered the test.
+</details>
+
+<details>
+<summary><b>How do I restore a backup?</b></summary>
+
+Go to **Settings → Backups → Restore a backup**. Pick a backup from the list, or **Use a file
+instead** for one you saved elsewhere. The app shows how many records it holds, for whom, and the
+date of its last change, before anything is replaced. Your records as they are now are backed
+up first, so you can undo a restore the same way.
+
+A backup made on another device opens only with that device's recovery key. The app asks for it.
+</details>
+
+<details>
+<summary><b>An update made things worse. Can I go back?</b></summary>
+
+On Windows (installer), the AppImage and the Arch package: yes. Go to **Settings → Updates → Go
+back to …**. The app downloads the version you had before, checks its signature, and restarts.
+If the newer version changed how records are stored, it also puts back the backup made just
+before the update; changes made since then are lost, and the app tells you so first.
+
+On Android, the system does not allow installing an older version over a newer one. Restore the
+backup made before the update in **Settings → Backups**, and tell us what went wrong.
+</details>
+
+<details>
+<summary><b>How do updates work? Can I turn them off?</b></summary>
+
+At start, the app checks the latest release on GitHub. If a new version is out, a message asks
+whether to install it. Nothing installs without you pressing **Install and restart**. Every
+download must carry the project's signature, or it is refused. To stop checking, go to
+**Settings → Updates** and choose **Do not check**.
+
+The portable Windows version cannot update itself; it tells you when a new version is out.
+</details>
+
+<details>
+<summary><b>How do I report a problem or suggest something?</b></summary>
+
+Go to **Settings → Updates → Report a problem** (or **Suggest a feature**). Your browser opens a
+GitHub form with the app version, your system and the last three error messages filled in. Words
+from your records are removed from those messages. You see everything before you press Submit.
+Please do not put names or health details in the report.
 </details>
 
 <details>
@@ -211,7 +279,13 @@ Screenshots in `docs/screenshots` come from made-up data in the browser preview.
 `/usr/bin/chromium`).
 
 Layout: `core/` is the Rust record store, `app/` the Tauri and Svelte app, `ui/` the theme
-framework, `plugins/device/` the key storage plugin for phones.
+framework, `plugins/device/` the key storage and update plugin for phones.
+
+Making a release: set the same version in `app/package.json`, `app/src-tauri/Cargo.toml` and
+`app/src-tauri/tauri.conf.json`, add a `## [x.y.z]` section to `CHANGELOG.md`, and push a tag
+`vx.y.z`. `.github/workflows/release.yml` builds and signs everything into a draft release and
+checks it. Publish the draft as a normal release (not a pre-release), or the in-app updater
+will not see it.
 </details>
 
 <details>

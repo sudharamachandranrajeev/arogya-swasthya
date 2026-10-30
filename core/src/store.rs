@@ -20,6 +20,8 @@ pub const TRASH_DAYS: i64 = 30;
 /// Daily backups kept in each backup folder.
 pub const KEEP_BACKUPS: usize = 14;
 const BACKUP_PREFIX: &str = "swasthya-";
+/// Name prefix of the backups made before an update.
+pub const PRE_UPDATE: &str = "pre-update-";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -44,6 +46,20 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// What a backup holds, shown before restoring it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Summary {
+    pub schema: i64,
+    /// Names of the people in it (not in the trash).
+    pub people: Vec<String>,
+    /// Records other than people, not in the trash.
+    pub records: usize,
+    pub trashed: usize,
+    /// When a record was last changed, if any.
+    pub last_change: Option<Timestamp>,
+}
 
 /// Schema steps; index + 1 is the version they lead to. Never edit a step
 /// that has shipped: add a new one.
@@ -371,27 +387,7 @@ impl Store {
 
     /// Write an encrypted copy to `path` (which must not exist), locked with `key`.
     pub fn export(&self, path: &Path, key: &Key) -> Result<()> {
-        if path.exists() {
-            return Err(Error::Exists(path.into()));
-        }
-        let p = path
-            .to_str()
-            .ok_or_else(|| Error::Io(std::io::Error::other("backup path is not UTF-8")))?;
-        self.conn.execute(
-            "ATTACH DATABASE ?1 AS backup KEY ?2",
-            params![p, key_literal(key)],
-        )?;
-        let r = self
-            .conn
-            .query_row("SELECT sqlcipher_export('backup')", [], |_| Ok(()))
-            .and_then(|_| {
-                self.conn.execute_batch(&format!(
-                    "PRAGMA backup.user_version = {}",
-                    self.schema_version().unwrap_or(0)
-                ))
-            });
-        self.conn.execute("DETACH DATABASE backup", [])?;
-        Ok(r?)
+        export_conn(&self.conn, path, key)
     }
 
     /// Today's backup into `dir`, keeping the newest [`KEEP_BACKUPS`]. Call it
@@ -408,34 +404,46 @@ impl Store {
         let _ = std::fs::remove_file(&tmp);
         self.export(&tmp, key)?;
         std::fs::rename(&tmp, &path)?;
-        let mut all = backups(dir)?;
-        all.sort();
-        let excess = all.len().saturating_sub(KEEP_BACKUPS);
-        for old in &all[..excess] {
-            std::fs::remove_file(old)?;
-        }
+        prune(dir, BACKUP_PREFIX, KEEP_BACKUPS)?;
         Ok(Some(path))
     }
 
-    /// Replace the database at `db` with `backup`. Close every `Store` on `db`
-    /// first. The backup must open with `key` and not be from a newer app.
-    /// The replaced files are kept beside it as `*.before-restore`.
-    pub fn restore_backup(backup: &Path, db: &Path, key: &Key) -> Result<()> {
-        drop(Store::open(backup, key)?);
-        let side = |suffix: &str| PathBuf::from(format!("{}{suffix}", db.display()));
-        let tmp = side(".restoring");
-        let _ = std::fs::remove_file(&tmp);
-        std::fs::copy(backup, &tmp)?;
-        // A leftover write-ahead log belongs to the old file and would corrupt the new one.
-        for suffix in ["", "-wal", "-shm"] {
-            let old = side(suffix);
-            if old.exists() {
-                std::fs::rename(&old, side(&format!("{suffix}.before-restore")))?;
-            }
+    /// Backup made just before installing another version, named after the
+    /// version running now, so going back can restore it. Kept apart from the
+    /// daily ones: the newest `keep` stay.
+    pub fn pre_update_backup(
+        &self,
+        dir: &Path,
+        key: &Key,
+        version: &str,
+        now: Timestamp,
+        keep: usize,
+    ) -> Result<PathBuf> {
+        if version.is_empty()
+            || !version
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        {
+            return Err(Error::Io(std::io::Error::other(format!(
+                "odd version {version:?}"
+            ))));
         }
-        std::fs::rename(&tmp, db)?;
-        drop(Store::open(db, key)?);
-        Ok(())
+        std::fs::create_dir_all(dir)?;
+        let name = format!(
+            "{PRE_UPDATE}{}-{version}.db",
+            now.strftime("%Y-%m-%d-%H%M%S")
+        );
+        let path = dir.join(&name);
+        let tmp = dir.join(format!("{name}.partial"));
+        let _ = std::fs::remove_file(&tmp);
+        self.export(&tmp, key)?;
+        std::fs::rename(&tmp, &path)?;
+        prune(dir, PRE_UPDATE, keep)?;
+        Ok(path)
+    }
+
+    pub fn summary(&self) -> Result<Summary> {
+        summarise(&self.conn)
     }
 
     fn query(&self, sql: &str, args: impl rusqlite::Params) -> Result<Vec<Value>> {
@@ -486,6 +494,131 @@ pub fn backups(dir: &Path) -> Result<Vec<PathBuf>> {
                 .is_some_and(|n| n.starts_with(BACKUP_PREFIX) && n.ends_with(".db"))
         })
         .collect())
+}
+
+/// Keep the newest `keep` backups whose names start with `prefix`. Names
+/// carry the date first, so name order is age order.
+fn prune(dir: &Path, prefix: &str, keep: usize) -> Result<()> {
+    let mut all: Vec<PathBuf> = std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(prefix) && n.ends_with(".db"))
+        })
+        .collect();
+    all.sort();
+    let excess = all.len().saturating_sub(keep);
+    for old in &all[..excess] {
+        std::fs::remove_file(old)?;
+    }
+    Ok(())
+}
+
+fn export_conn(conn: &Connection, path: &Path, key: &Key) -> Result<()> {
+    if path.exists() {
+        return Err(Error::Exists(path.into()));
+    }
+    let p = path
+        .to_str()
+        .ok_or_else(|| Error::Io(std::io::Error::other("backup path is not UTF-8")))?;
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    conn.execute(
+        "ATTACH DATABASE ?1 AS backup KEY ?2",
+        params![p, key_literal(key)],
+    )?;
+    let r = conn
+        .query_row("SELECT sqlcipher_export('backup')", [], |_| Ok(()))
+        .and_then(|_| conn.execute_batch(&format!("PRAGMA backup.user_version = {version}")));
+    conn.execute("DETACH DATABASE backup", [])?;
+    Ok(r?)
+}
+
+fn summarise(conn: &Connection) -> Result<Summary> {
+    let schema: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    let mut st = conn.prepare("SELECT type, json, updated_at, deleted_at FROM records")?;
+    let rows = st.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)?,
+            r.get::<_, Option<i64>>(3)?,
+        ))
+    })?;
+    let mut sum = Summary {
+        schema,
+        people: Vec::new(),
+        records: 0,
+        trashed: 0,
+        last_change: None,
+    };
+    for row in rows {
+        let (kind, json, updated, deleted) = row?;
+        sum.last_change = sum.last_change.max(Timestamp::from_second(updated).ok());
+        match (deleted, kind.as_str()) {
+            (Some(_), _) => sum.trashed += 1,
+            (None, "Patient") => {
+                let r: Value = serde_json::from_str(&json)?;
+                let name = r["name"][0]["text"].as_str().unwrap_or("Unnamed");
+                sum.people.push(name.to_owned());
+            }
+            (None, _) => sum.records += 1,
+        }
+    }
+    sum.people.sort();
+    Ok(sum)
+}
+
+/// Open a copy of the backup at `src` with `key` (in `work`, removed again)
+/// and say what it holds. `src` itself is only read.
+pub fn inspect(src: &Path, key: &Key, work: &Path) -> Result<Summary> {
+    let copy = work.join("inspect.db");
+    let r = with_copy(src, key, &copy, summarise);
+    let _ = std::fs::remove_file(&copy);
+    r
+}
+
+/// Turn the backup at `src` (opened with `src_key`, which may be another
+/// device's) into a database locked with `key`, written to `dest` (which must
+/// not exist). Refuses a backup from a newer app. `src` itself is only read;
+/// the caller swaps `dest` in.
+pub fn restore_copy(src: &Path, src_key: &Key, dest: &Path, key: &Key) -> Result<Summary> {
+    let copy = dest.with_extension("source");
+    let r = with_copy(src, src_key, &copy, |conn| {
+        let sum = summarise(conn)?;
+        export_conn(conn, dest, key)?;
+        Ok(sum)
+    });
+    let _ = std::fs::remove_file(&copy);
+    if r.is_err() {
+        let _ = std::fs::remove_file(dest);
+    }
+    r
+}
+
+fn with_copy<T>(
+    src: &Path,
+    key: &Key,
+    copy: &Path,
+    f: impl FnOnce(&Connection) -> Result<T>,
+) -> Result<T> {
+    let _ = std::fs::remove_file(copy);
+    std::fs::copy(src, copy)?;
+    let conn = Connection::open(copy)?;
+    conn.execute_batch(&format!("PRAGMA key = \"{}\";", key_literal(key)))?;
+    if conn
+        .query_row("SELECT count(*) FROM sqlite_master", [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .is_err()
+    {
+        return Err(Error::WrongKey);
+    }
+    let v: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if v > MIGRATIONS.len() as i64 {
+        return Err(Error::TooNew(v));
+    }
+    f(&conn)
 }
 
 /// Insert or replace a row from its JSON; the indexed columns come from the JSON.
@@ -732,21 +865,71 @@ mod tests {
                 .any(|w| w == b"Asthma")
         );
 
-        // Lose a record, then restore yesterday's state.
+        // What the backup holds, read without touching it.
+        let sum = inspect(&keep, &KEY, dir.path()).unwrap();
+        assert_eq!(sum.people, ["Asha Test"]);
+        assert_eq!((sum.records, sum.trashed), (1, 0));
+        assert!(matches!(
+            inspect(&keep, &[9; 32], dir.path()),
+            Err(Error::WrongKey)
+        ));
+
+        // A backup from another device (its own key) becomes one locked with ours.
         s.delete(&p, day).unwrap();
-        drop(s);
-        Store::restore_backup(&keep, &db, &KEY).unwrap();
-        let s = Store::open(&db, &KEY).unwrap();
-        assert_eq!(s.timeline(&p).unwrap().len(), 1);
+        let dest = dir.path().join("restored.db");
+        let other = [3; 32];
+        let foreign = dir.path().join("foreign.db");
+        s.export(&foreign, &other).unwrap();
+        restore_copy(&keep, &KEY, &dest, &other).unwrap();
+        let r = Store::open(&dest, &other).unwrap();
+        assert_eq!(r.timeline(&p).unwrap().len(), 1, "the lost record is back");
         assert_eq!(
-            s.setting::<String>("backup.folder").unwrap().as_deref(),
+            r.setting::<String>("backup.folder").unwrap().as_deref(),
             Some("/somewhere")
         );
-        assert!(dir.path().join("swasthya.db.before-restore").exists());
+        assert!(Store::open(&foreign, &KEY).is_err());
+        let back = dir.path().join("back.db");
+        assert_eq!(
+            restore_copy(&foreign, &other, &back, &KEY).unwrap().trashed,
+            2
+        );
+        assert!(Store::open(&back, &KEY).is_ok());
 
-        // A backup that does not open is refused and the database is left alone.
-        assert!(Store::restore_backup(&keep, &db, &[9; 32]).is_err());
-        assert_eq!(Store::open(&db, &KEY).unwrap().people().unwrap().len(), 1);
+        // A key that does not open the backup leaves nothing behind.
+        let bad = dir.path().join("bad.db");
+        assert!(restore_copy(&keep, &[9; 32], &bad, &KEY).is_err());
+        assert!(!bad.exists());
+    }
+
+    #[test]
+    fn pre_update_backups_are_kept_apart() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::open(&dir.path().join("swasthya.db"), &KEY).unwrap();
+        let backups_dir = dir.path().join("backups");
+        s.daily_backup(&backups_dir, &KEY, at(NOW)).unwrap();
+        for m in 0..5 {
+            s.pre_update_backup(
+                &backups_dir,
+                &KEY,
+                "0.1.0",
+                at(NOW) + SignedDuration::from_mins(m),
+                3,
+            )
+            .unwrap();
+        }
+        let mut names: Vec<String> = std::fs::read_dir(&backups_dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names.len(), 4, "{names:?}");
+        assert!(names[0].starts_with("pre-update-2026-11-04-090200-0.1.0"));
+        assert!(names[3].starts_with("swasthya-"));
+        assert_eq!(backups(&backups_dir).unwrap().len(), 1);
+        assert!(
+            s.pre_update_backup(&backups_dir, &KEY, "../x", at(NOW), 3)
+                .is_err()
+        );
     }
 
     #[test]

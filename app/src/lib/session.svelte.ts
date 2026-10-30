@@ -30,6 +30,7 @@ class Session {
   /** Load everything; call at start and after unlocking. */
   async load() {
     this.status = await api.status()
+    if (this.status.notice) this.say({ text: this.status.notice, error: true })
     if (!this.status.open || this.status.locked) return
     const [done, terms, places] = await Promise.all([
       api.getSetting<boolean>('setup.done'),
@@ -84,7 +85,32 @@ class Session {
   }
 
   fail(e: unknown) {
-    this.say({ text: message(e), error: true })
+    const text = message(e)
+    remember(text)
+    this.say({ text, error: true })
+  }
+}
+
+// The last few error messages, for "Report a problem". The Rust side cuts
+// out quoted words, ids and numbers again before they go into a report.
+const ERRORS = 'swasthya.errors'
+
+function remember(text: string) {
+  try {
+    const list: string[] = JSON.parse(localStorage.getItem(ERRORS) ?? '[]')
+    const line = `${new Date().toISOString().slice(0, 16)} ${text}`
+    localStorage.setItem(ERRORS, JSON.stringify([line, ...list].slice(0, 3)))
+  } catch {
+    // Storage blocked: the report goes without them.
+  }
+}
+
+export function recentErrors(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(ERRORS) ?? '[]')
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string').slice(0, 3) : []
+  } catch {
+    return []
   }
 }
 

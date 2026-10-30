@@ -1,9 +1,9 @@
 <script lang="ts">
   // First run: where you live, the terms, the recovery key (shown once, then
-  // checked), an optional app lock, backups, and the first person. Coming back
+  // checked), an optional app lock, backups, updates, and the first person. Coming back
   // after the terms change shows only the terms.
   import { Button, Card, Explain } from '@swasthya/ui'
-  import { api, inApp, message } from './api.ts'
+  import { api, inApp, message, type UpdateMode } from './api.ts'
   import DateField from './DateField.svelte'
   import { check, patient, toFhir, type Values } from './model/fhir.ts'
   import { emergencyLine } from './model/places.ts'
@@ -11,8 +11,8 @@
   import PlacesEditor from './PlacesEditor.svelte'
   import { session } from './session.svelte.ts'
 
-  type Step = 'welcome' | 'places' | 'terms' | 'recovery' | 'lock' | 'backups' | 'person'
-  const all: Step[] = ['welcome', 'places', 'terms', 'recovery', 'lock', 'backups', 'person']
+  type Step = 'welcome' | 'places' | 'terms' | 'recovery' | 'lock' | 'backups' | 'updates' | 'person'
+  const all: Step[] = ['welcome', 'places', 'terms', 'recovery', 'lock', 'backups', 'updates', 'person']
 
   // Someone who finished setup before only needs to accept new terms.
   const returning = session.people.length > 0 && !session.status?.recoveryPending
@@ -85,6 +85,11 @@
     if (typeof picked !== 'string') return
     await api.setBackupFolder(picked)
     folder = picked
+  }
+
+  // ---- updates ----
+  async function setUpdates(mode: UpdateMode) {
+    if (inApp) await api.setUpdateMode(mode)
   }
 
   // ---- first person ----
@@ -201,6 +206,18 @@
         {/if}
         <div class="actions">
           <Button onclick={next}>{folder ? 'Continue' : 'Continue without a second copy'}</Button>
+          <Button variant="ghost" onclick={back}>Back</Button>
+        </div>
+      </Card>
+
+    {:else if step === 'updates'}
+      <Card title="New versions" explain="New versions fix problems and add features. They come from the project's GitHub page and are checked against the project's signature.">
+        <p>When the app starts, it can check for a new version and ask you before installing it. Nothing is installed without you pressing a button.</p>
+        <p>Your records are backed up before every update, and you can go back to the version before in Settings → Updates.</p>
+        <p class="muted small">Checking tells GitHub your internet address and nothing else. No health information is sent.</p>
+        <div class="actions">
+          <Button disabled={busy} onclick={() => run(() => setUpdates('ask'))}>Check and ask me</Button>
+          <Button variant="ghost" disabled={busy} onclick={() => run(() => setUpdates('off'))}>Do not check</Button>
           <Button variant="ghost" onclick={back}>Back</Button>
         </div>
       </Card>

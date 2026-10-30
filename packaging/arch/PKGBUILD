@@ -1,0 +1,25 @@
+# Arch Linux package for Arogya Swasthya, built in CI from the release binary
+# (see .github/workflows/release.yml). To build it yourself: put a built
+# `arogya-swasthya` binary next to this file and run
+# `SWASTHYA_VERSION=x.y.z makepkg`.
+pkgname=arogya-swasthya
+pkgver=${SWASTHYA_VERSION:-0.0.0}
+pkgrel=1
+pkgdesc='Private, lifelong health records for you and your family'
+arch=(x86_64)
+url='https://github.com/sudharamachandranrajeev/arogya-swasthya'
+license=(MIT)
+depends=(webkit2gtk-4.1 gtk3 librsvg hicolor-icon-theme polkit)
+options=(!strip !debug)
+
+package() {
+  install -Dm755 "$startdir/arogya-swasthya" "$pkgdir/usr/bin/arogya-swasthya"
+  install -Dm644 "$startdir/arogya-swasthya.desktop" "$pkgdir/usr/share/applications/arogya-swasthya.desktop"
+  install -Dm644 "$startdir/icons/32x32.png" "$pkgdir/usr/share/icons/hicolor/32x32/apps/arogya-swasthya.png"
+  install -Dm644 "$startdir/icons/128x128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/arogya-swasthya.png"
+  install -Dm644 "$startdir/icons/128x128@2x.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/arogya-swasthya.png"
+  install -Dm644 "$startdir/LICENSE" "$pkgdir/usr/share/licenses/arogya-swasthya/LICENSE"
+  # Tells the app it was installed with pacman, so it updates through pacman.
+  install -dm755 "$pkgdir/usr/lib/arogya-swasthya"
+  echo pacman >"$pkgdir/usr/lib/arogya-swasthya/install-type"
+}

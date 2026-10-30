@@ -1,1 +1,17 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- In-app updates: Android asks the user to allow this once. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- Hands a downloaded update to the system installer. -->
+        <provider
+            android:name="dev.arogya.swasthya.device.UpdatesFileProvider"
+            android:authorities="${applicationId}.swasthya.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/swasthya_updates" />
+        </provider>
+    </application>
+</manifest>

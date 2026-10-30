@@ -2,6 +2,9 @@
 //! this device, guards it with an optional app lock (PIN, or fingerprint/face
 //! on phones), keeps daily backups, and answers the UI's commands.
 
+mod data;
+mod update;
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -36,6 +39,9 @@ struct Inner {
     locked: bool,
     wrong_pins: u32,
     wait_until: Option<Timestamp>,
+    /// Something the user should hear about once, such as a failed restore
+    /// at start.
+    notice: Option<String>,
 }
 
 struct App {
@@ -67,18 +73,19 @@ impl App {
         let first = !db.exists();
         let mut inner = self.inner.lock().unwrap();
         match app.device().db_key(&self.dir, first) {
-            Ok(k) => match Store::open(&db, &k.key) {
-                Ok(store) => {
+            Ok(k) => match (self.apply_staged_restore(&k.key), Store::open(&db, &k.key)) {
+                (notice, Ok(store)) => {
                     let locked = lock_on(&store);
                     *inner = Inner {
                         store: Some(store),
                         key: Some(k.key),
                         key_storage: Some(k.storage),
                         locked,
+                        notice,
                         ..Inner::default()
                     }
                 }
-                Err(e) => {
+                (_, Err(e)) => {
                     inner.problem = Some(format!("The saved key does not open your data ({e})."))
                 }
             },
@@ -139,11 +146,13 @@ struct StatusView {
     /// Seconds before another PIN may be tried.
     wait_secs: i64,
     platform: &'static str,
+    notice: Option<String>,
 }
 
 #[tauri::command]
 fn status(state: State<App>) -> CommandResult<StatusView> {
-    let inner = state.lock_inner()?;
+    let mut inner = state.lock_inner()?;
+    let notice = inner.notice.take();
     let flag = |k: &str| {
         inner
             .store
@@ -169,6 +178,7 @@ fn status(state: State<App>) -> CommandResult<StatusView> {
         biometric: flag("lock.biometric"),
         wait_secs,
         platform: std::env::consts::OS,
+        notice,
     })
 }
 
@@ -309,109 +319,6 @@ fn lock(state: State<App>) -> CommandResult<bool> {
     Ok(inner.locked)
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Backups {
-    folder: String,
-    files: Vec<String>,
-    /// The extra folder the user chose, if any.
-    user_folder: Option<String>,
-    user_files: Vec<String>,
-}
-
-fn names(dir: &Path) -> Vec<String> {
-    let mut v: Vec<String> = store::backups(dir)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|p| p.file_name()?.to_str().map(String::from))
-        .collect();
-    v.sort();
-    v.reverse();
-    v
-}
-
-#[tauri::command]
-fn backups(state: State<App>) -> CommandResult<Backups> {
-    let user_folder = state.with(|s| Ok(get::<String>(s, "backup.folder")))?;
-    let dir = state.dir.join(BACKUP_DIR);
-    Ok(Backups {
-        folder: dir.display().to_string(),
-        files: names(&dir),
-        user_files: user_folder
-            .as_deref()
-            .map(|f| names(Path::new(f)))
-            .unwrap_or_default(),
-        user_folder,
-    })
-}
-
-/// Choose the extra backup folder (`None` stops copying there). Today's
-/// backup is written to it at once, which also proves it is writable.
-#[tauri::command]
-fn set_backup_folder(state: State<App>, folder: Option<String>) -> CommandResult<()> {
-    if let Some(f) = &folder {
-        let path = Path::new(f);
-        if !path.is_absolute() || !path.is_dir() {
-            return Err(format!("{f} is not a folder on this device."));
-        }
-        let inner = state.lock_inner()?;
-        if let (Some(store), Some(key), false) = (&inner.store, &inner.key, inner.locked) {
-            store
-                .daily_backup(path, key, now())
-                .map_err(|e| format!("Could not write a backup to {f}: {e}"))?;
-        }
-    }
-    state.with(|s| s.set_setting("backup.folder", &folder))
-}
-
-/// Back up now into the app's folder, whether or not today's backup exists.
-#[tauri::command]
-fn backup_now(state: State<App>) -> CommandResult<String> {
-    let inner = state.lock_inner()?;
-    let (Some(store), Some(key), false) = (&inner.store, &inner.key, inner.locked) else {
-        return Err("Arogya Swasthya is locked.".into());
-    };
-    let dir = state.dir.join(BACKUP_DIR);
-    std::fs::create_dir_all(&dir).map_err(err)?;
-    let name = format!("manual-{}.db", now().strftime("%Y-%m-%d-%H%M%S"));
-    store.export(&dir.join(&name), key).map_err(err)?;
-    Ok(name)
-}
-
-/// Write a backup to a file the user picked in the save dialog. On Android
-/// that is a content URI, which only the fs plugin can open.
-#[tauri::command]
-fn save_backup_to(app: AppHandle, state: State<App>, target: String) -> CommandResult<()> {
-    let tmp = state.dir.join("save-backup.partial");
-    let _ = std::fs::remove_file(&tmp);
-    {
-        let inner = state.lock_inner()?;
-        let (Some(store), Some(key), false) = (&inner.store, &inner.key, inner.locked) else {
-            return Err("Arogya Swasthya is locked.".into());
-        };
-        store.export(&tmp, key).map_err(err)?;
-    }
-    let copied = copy_to(&app, &tmp, &target);
-    let _ = std::fs::remove_file(&tmp);
-    copied.map_err(|e| format!("Could not save the backup: {e}"))
-}
-
-#[cfg(mobile)]
-fn copy_to(app: &AppHandle, from: &Path, target: &str) -> std::io::Result<()> {
-    use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
-    let path: FilePath = target.parse().map_err(std::io::Error::other)?;
-    let mut opts = OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
-    let mut out = app.fs().open(path, opts)?;
-    std::io::copy(&mut std::fs::File::open(from)?, &mut out)?;
-    Ok(())
-}
-
-#[cfg(desktop)]
-fn copy_to(_app: &AppHandle, from: &Path, target: &str) -> std::io::Result<()> {
-    std::fs::copy(from, target).map(|_| ())
-}
-
 /// Settings the UI may read and write. Everything else (PIN, backup folder,
 /// recovery state) has its own command with its own checks.
 const UI_SETTINGS: &[&str] = &["places", "terms.accepted", "setup.done", "person.current"];
@@ -495,15 +402,21 @@ fn upkeep_loop(app: AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if std::env::args().any(|a| a == "--version") {
+        println!("Arogya Swasthya {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
     let mut builder = tauri::Builder::default();
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }));
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }))
+            .plugin(tauri_plugin_updater::Builder::new().build());
     }
     #[cfg(mobile)]
     {
@@ -514,6 +427,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_swasthya_device::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(dir.join(BACKUP_DIR))?;
@@ -546,10 +460,20 @@ pub fn run() {
             unlock_biometric,
             set_biometric,
             lock,
-            backups,
-            set_backup_folder,
-            backup_now,
-            save_backup_to,
+            data::backups,
+            data::set_backup_folder,
+            data::backup_now,
+            data::save_backup_to,
+            data::pick_backup,
+            data::inspect_backup,
+            data::restore_backup,
+            update::update_status,
+            update::set_update_mode,
+            update::open_page,
+            update::check_update,
+            update::install_update,
+            update::rollback_plan,
+            update::rollback,
             get_setting,
             put_setting,
             people,

@@ -2,6 +2,7 @@
 // in-memory stand-in answers instead, so every screen can be tried with
 // made-up data that disappears on reload.
 import { invoke } from '@tauri-apps/api/core'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { clone, type Resource } from './model/fhir.ts'
 
 export const inApp = '__TAURI_INTERNALS__' in globalThis
@@ -18,6 +19,8 @@ export interface Status {
   biometric: boolean
   waitSecs: number
   platform: string
+  /** Something to tell the user once, such as a failed restore at start. */
+  notice: string | null
 }
 
 export interface Trashed {
@@ -25,12 +28,55 @@ export interface Trashed {
   deletedAt: string
 }
 
+export type BackupKind = 'daily' | 'manual' | 'preUpdate' | 'beforeRestore'
+
+export interface Backup {
+  name: string
+  kind: BackupKind
+  bytes: number
+}
+
 export interface Backups {
   folder: string
-  files: string[]
+  files: Backup[]
   userFolder: string | null
   userFiles: string[]
 }
+
+/** What a backup holds, shown before restoring it. */
+export interface BackupSummary {
+  schema: number
+  people: string[]
+  records: number
+  trashed: number
+  lastChange: string | null
+}
+
+export type InstallKind = 'installer' | 'appImage' | 'pacman' | 'portable' | 'android' | 'other'
+export type UpdateMode = 'ask' | 'off'
+
+export interface UpdateStatus {
+  kind: InstallKind
+  canInstall: boolean
+  current: string
+  previous: string | null
+  mode: UpdateMode
+}
+
+export interface UpdateInfo {
+  version: string
+  notes: string | null
+  date: string | null
+  canInstall: boolean
+}
+
+export interface RollbackPlan {
+  version: string
+  backup: string | null
+  needsRestore: boolean
+}
+
+export type Page = 'releases' | 'bug' | 'idea'
 
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
 
@@ -48,6 +94,16 @@ export interface Api {
   setBackupFolder(folder: string | null): Promise<void>
   backupNow(): Promise<string>
   saveBackupTo(target: string): Promise<void>
+  pickBackup(): Promise<string | null>
+  inspectBackup(name: string | null, recovery: string | null): Promise<BackupSummary>
+  restoreBackup(name: string | null, recovery: string | null): Promise<string>
+  updateStatus(): Promise<UpdateStatus>
+  setUpdateMode(mode: UpdateMode): Promise<void>
+  checkUpdate(): Promise<UpdateInfo | null>
+  installUpdate(version: string): Promise<void>
+  rollbackPlan(): Promise<RollbackPlan | null>
+  rollback(restore: boolean): Promise<void>
+  openPage(page: Page, fields?: Record<string, string>): Promise<void>
   getSetting<T>(key: UiSetting): Promise<T | null>
   putSetting(key: UiSetting, value: unknown): Promise<void>
   people(): Promise<Resource[]>
@@ -75,6 +131,16 @@ const tauri: Api = {
   setBackupFolder: (folder) => invoke('set_backup_folder', { folder }),
   backupNow: () => invoke('backup_now'),
   saveBackupTo: (target) => invoke('save_backup_to', { target }),
+  pickBackup: () => invoke('pick_backup'),
+  inspectBackup: (name, recovery) => invoke('inspect_backup', { name, recovery }),
+  restoreBackup: (name, recovery) => invoke('restore_backup', { name, recovery }),
+  updateStatus: () => invoke('update_status'),
+  setUpdateMode: (mode) => invoke('set_update_mode', { mode }),
+  checkUpdate: () => invoke('check_update'),
+  installUpdate: (version) => invoke('install_update', { version }),
+  rollbackPlan: () => invoke('rollback_plan'),
+  rollback: (restore) => invoke('rollback', { restore }),
+  openPage: (page, fields = {}) => invoke('open_page', { page, fields }),
   getSetting: (key) => invoke('get_setting', { key }),
   putSetting: (key, value) => invoke('put_setting', { key, value }),
   people: () => invoke('people'),
@@ -124,7 +190,7 @@ function memory(): Api {
   const name = (r: Resource) =>
     String((r as any).code?.text ?? (r as any).name?.[0]?.text ?? (r as any).medicationCodeableConcept?.text ?? (r as any).vaccineCode?.text ?? r.resourceType)
   return {
-    status: async () => ({ open: true, locked: false, problem: null, recoveryPending: !settings.get('recovery.saved'), keyStorage: null, hasPin: !!pin, biometric: false, waitSecs: 0, platform: 'browser' }),
+    status: async () => ({ open: true, locked: false, problem: null, recoveryPending: !settings.get('recovery.saved'), keyStorage: null, hasPin: !!pin, biometric: false, waitSecs: 0, platform: 'browser', notice: null }),
     unlockPin: async (p) => p === pin,
     unlockBiometric: async () => {},
     unlockWith: async () => {},
@@ -137,6 +203,16 @@ function memory(): Api {
     setBackupFolder: async () => { throw 'The browser preview cannot write backups.' },
     backupNow: async () => { throw 'The browser preview cannot write backups.' },
     saveBackupTo: async () => { throw 'The browser preview cannot write backups.' },
+    pickBackup: async () => { throw 'The browser preview has no backups to restore.' },
+    inspectBackup: async () => { throw 'The browser preview has no backups to restore.' },
+    restoreBackup: async () => { throw 'The browser preview has no backups to restore.' },
+    updateStatus: async () => ({ kind: 'other', canInstall: false, current: 'preview', previous: null, mode: (settings.get('updates.mode') as UpdateMode) ?? 'ask' }),
+    setUpdateMode: async (mode) => void settings.set('updates.mode', mode),
+    checkUpdate: async () => null,
+    installUpdate: async () => { throw 'The browser preview cannot update itself.' },
+    rollbackPlan: async () => null,
+    rollback: async () => { throw 'The browser preview cannot update itself.' },
+    openPage: async () => { throw 'The browser preview cannot open pages.' },
     getSetting: async <T,>(key: UiSetting) => (settings.get(key) as T) ?? null,
     putSetting: async (key, value) => void settings.set(key, clone(value)),
     people: async () => live().filter((r) => r.resourceType === 'Patient'),
@@ -187,6 +263,12 @@ function memory(): Api {
 }
 
 export const api: Api = inApp ? tauri : memory()
+
+/** Download progress of an update: bytes so far and the total, if known. */
+export function onUpdateProgress(f: (done: number, total: number | null) => void): Promise<UnlistenFn> {
+  if (!inApp) return Promise.resolve(() => {})
+  return listen<[number, number | null]>('update-progress', (e) => f(e.payload[0], e.payload[1]))
+}
 
 /** A command's error as plain text. */
 export const message = (e: unknown) => (typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Arogya Swasthya
+Comment=Private, lifelong health records for you and your family
+Exec=arogya-swasthya
+Icon=arogya-swasthya
+Terminal=false
+Categories=Office;MedicalSoftware;
+StartupWMClass=arogya-swasthya

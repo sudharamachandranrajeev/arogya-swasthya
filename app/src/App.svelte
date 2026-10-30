@@ -21,6 +21,8 @@
   import Settings from './lib/Settings.svelte'
   import Timeline from './lib/Timeline.svelte'
   import Toast from './lib/Toast.svelte'
+  import UpdateBanner from './lib/UpdateBanner.svelte'
+  import { updates } from './lib/updates.svelte.ts'
   import Wizard from './lib/Wizard.svelte'
 
   const items: NavItem[] = [
@@ -55,6 +57,10 @@
 
   session.load().catch((e) => session.fail(e))
   const status = $derived(session.status)
+  // Check for a new version once the app is open and set up.
+  $effect(() => {
+    if (status?.open && !status.locked && session.ready) updates.startup()
+  })
 </script>
 
 {#if !status}
@@ -76,6 +82,7 @@
       <span class="sos">{emergencyLine(session.places)}</span><br />
       Stored on this device · encrypted{ui.calm ? ' · calm' : ''}
     {/snippet}
+    <UpdateBanner />
     {#key page}
       <div class="page">
         {#if !session.current && page !== 'settings' && page !== 'appearance'}
