@@ -1,20 +1,26 @@
 <script lang="ts">
   // Charts of every vital sign, numeric test result and symptom recorded at
   // least twice, for one time span chosen above them all.
-  import { Card, Segmented } from '@swasthya/ui'
+  import { Card, Pill, Segmented } from '@swasthya/ui'
   import { api } from './api.ts'
   import Chart from './Chart.svelte'
+  import type { Resource } from './model/fhir.ts'
+  import { insights, MIN_DAYS } from './model/insights.ts'
   import { series, within, type Series, type Span } from './model/trends.ts'
   import { session } from './session.svelte.ts'
 
   let all = $state<Series[]>([])
+  let meds = $state<Resource[]>([])
   let span = $state<Span>('1y')
 
   $effect(() => {
     void session.version
     const person = session.current
     if (!person) return
-    api.records(person, 'Observation').then((r) => (all = series(r)), session.fail.bind(session))
+    Promise.all([api.records(person, 'Observation'), api.records(person, 'MedicationStatement')]).then(([r, m]) => {
+      all = series(r)
+      meds = m
+    }, session.fail.bind(session))
   })
 
   const shown = $derived(all.map((s) => ({ s, points: within(s, span) })).filter((x) => x.points.length >= 2))
@@ -23,6 +29,8 @@
     { id: 'result', title: 'Test results' },
     { id: 'symptom', title: 'Symptoms' },
   ] as const
+  // Patterns use every reading, whatever the span above.
+  const found = $derived(insights(all, meds))
   const unitOf = (s: Series) => (s.group === 'symptom' ? '0 to 10' : s.unit)
 </script>
 
@@ -63,8 +71,27 @@
   {/if}
 {/each}
 
+{#if found.length}
+  <h2>Patterns</h2>
+  <p class="muted small">Only for things that plausibly go together, from at least {MIN_DAYS} days of readings. A pattern is something to ask a clinician about: it does not show what caused what.</p>
+  <div class="grid">
+    {#each found as f (f.id)}
+      <Card title={f.title}>
+        <p>{f.text}</p>
+        <p class="meta">
+          {#if f.size}<Pill tone="accent">{f.size}</Pill>{/if}
+          <span class="muted small">{f.enough ? `Based on ${f.n} days` : 'Keep recording'}</span>
+        </p>
+      </Card>
+    {/each}
+  </div>
+{/if}
+
 <style>
   .filters { margin-bottom: 18px; }
+  .meta { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; }
+  .small { font-size: var(--text-small); }
+  .muted { color: var(--c-muted); }
   h2 { font-size: var(--text-lead); margin: 22px 0 10px; }
   .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); }
 </style>
