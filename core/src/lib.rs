@@ -3,6 +3,7 @@
 
 pub mod fhir;
 pub mod files;
+pub mod import;
 pub mod keys;
 pub mod store;
 

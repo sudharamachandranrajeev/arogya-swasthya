@@ -289,7 +289,41 @@ impl Store {
     /// Create or update a record and return it as stored. A new record gets an
     /// id; every save stamps `meta.lastUpdated`. Anything but a Patient must
     /// point at a person who is kept here and not in the trash.
-    pub fn save(&mut self, mut resource: Value, now: Timestamp) -> Result<Value> {
+    pub fn save(&mut self, resource: Value, now: Timestamp) -> Result<Value> {
+        let (resource, json, label) = self.prepare(resource, now)?;
+        let id = resource["id"].as_str().unwrap_or_default().to_string();
+        self.change(|tx, group| {
+            record(tx, group, &id, &label, now)?;
+            write(tx, &json, now.as_second(), None)
+        })?;
+        Ok(resource)
+    }
+
+    /// Save several records as one change, so one Undo takes them all back
+    /// (an import, say). Nothing is saved if any of them is refused.
+    pub fn save_all(
+        &mut self,
+        resources: Vec<Value>,
+        label: &str,
+        now: Timestamp,
+    ) -> Result<Vec<Value>> {
+        let mut ready = Vec::with_capacity(resources.len());
+        for r in resources {
+            ready.push(self.prepare(r, now)?);
+        }
+        self.change(|tx, group| {
+            for (r, json, _) in &ready {
+                record(tx, group, r["id"].as_str().unwrap_or_default(), label, now)?;
+                write(tx, json, now.as_second(), None)?;
+            }
+            Ok(())
+        })?;
+        Ok(ready.into_iter().map(|(r, _, _)| r).collect())
+    }
+
+    /// Check a record before saving: id (new if missing), lastUpdated, and
+    /// a person who is kept here. Returns it with its JSON and undo label.
+    fn prepare(&self, mut resource: Value, now: Timestamp) -> Result<(Value, String, String)> {
         let kind = fhir::resource_type(&resource)?.to_string();
         let obj = resource.as_object_mut().ok_or(Invalid::NoType)?;
         match obj.get("id").and_then(Value::as_str) {
@@ -307,15 +341,11 @@ impl Store {
         if kind != "Patient" && !self.is_live("Patient", &person)? {
             return Err(Error::NoPerson(person));
         }
-        let id = resource["id"].as_str().unwrap_or_default().to_string();
-        let verb = if self.exists(&id)? { "edit" } else { "add" };
+        let id = resource["id"].as_str().unwrap_or_default();
+        let verb = if self.exists(id)? { "edit" } else { "add" };
         let label = format!("{verb} {}", describe(&resource));
         let json = serde_json::to_string(&resource)?;
-        self.change(|tx, group| {
-            record(tx, group, &id, &label, now)?;
-            write(tx, &json, now.as_second(), None)
-        })?;
-        Ok(resource)
+        Ok((resource, json, label))
     }
 
     /// Move to the trash. Trashing a person trashes all their records with

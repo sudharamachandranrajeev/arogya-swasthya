@@ -102,7 +102,7 @@ pub fn save_document_to(
         .map_err(|e| format!("Could not save the document: {e}"))
 }
 
-fn file_name(path: &FilePath) -> String {
+pub(crate) fn file_name(path: &FilePath) -> String {
     let s = path.to_string();
     let last = s.rsplit(['/', '\\']).next().unwrap_or("document");
     let name: String = last.chars().filter(|c| !c.is_control()).take(200).collect();
@@ -144,7 +144,10 @@ fn content_type(name: &str) -> &'static str {
 }
 
 #[cfg(mobile)]
-fn open_picked(app: &AppHandle, path: FilePath) -> std::io::Result<Box<dyn Read + Send>> {
+pub(crate) fn open_picked(
+    app: &AppHandle,
+    path: FilePath,
+) -> std::io::Result<Box<dyn Read + Send>> {
     use tauri_plugin_fs::{FsExt, OpenOptions};
     let mut opts = OpenOptions::new();
     opts.read(true);
@@ -152,7 +155,10 @@ fn open_picked(app: &AppHandle, path: FilePath) -> std::io::Result<Box<dyn Read 
 }
 
 #[cfg(desktop)]
-fn open_picked(_app: &AppHandle, path: FilePath) -> std::io::Result<Box<dyn Read + Send>> {
+pub(crate) fn open_picked(
+    _app: &AppHandle,
+    path: FilePath,
+) -> std::io::Result<Box<dyn Read + Send>> {
     let p = path.into_path().map_err(std::io::Error::other)?;
     Ok(Box::new(std::fs::File::open(p)?))
 }

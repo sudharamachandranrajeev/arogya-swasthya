@@ -81,6 +81,21 @@ export interface Hit {
   snippet: string
 }
 
+export interface Candidate {
+  resource: Resource
+  /** A record already kept that looks the same (type, name and date). */
+  duplicateOf: string | null
+}
+
+/** A file read for import, waiting for the user to pick what to keep. */
+export interface Pending {
+  person: string
+  fileName: string
+  candidates: Candidate[]
+  /** Types in the file that are not kept here, with how many of each. */
+  skipped: [string, number][]
+}
+
 export type Page = 'releases' | 'bug' | 'idea'
 
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
@@ -104,6 +119,12 @@ export interface Api {
   addDocument(doc: Resource): Promise<Resource | null>
   documentBytes(id: string): Promise<ArrayBuffer>
   saveDocumentTo(id: string, target: string): Promise<void>
+  /** Ask for a FHIR JSON file and read it into a review list. Null when cancelled. */
+  importPick(person: string): Promise<Pending | null>
+  importPending(): Promise<Pending | null>
+  /** Save the candidates at these places as one change. Returns how many. */
+  importAccept(picks: number[]): Promise<number>
+  importDiscard(): Promise<void>
   inspectBackup(name: string | null, recovery: string | null): Promise<BackupSummary>
   restoreBackup(name: string | null, recovery: string | null): Promise<string>
   updateStatus(): Promise<UpdateStatus>
@@ -146,6 +167,10 @@ const tauri: Api = {
   addDocument: (doc) => invoke('add_document', { doc }),
   documentBytes: (id) => invoke('document_bytes', { id }),
   saveDocumentTo: (id, target) => invoke('save_document_to', { id, target }),
+  importPick: (person) => invoke('import_pick', { person }),
+  importPending: () => invoke('import_pending'),
+  importAccept: (picks) => invoke('import_accept', { picks }),
+  importDiscard: () => invoke('import_discard'),
   inspectBackup: (name, recovery) => invoke('inspect_backup', { name, recovery }),
   restoreBackup: (name, recovery) => invoke('restore_backup', { name, recovery }),
   updateStatus: () => invoke('update_status'),
@@ -222,6 +247,38 @@ function memory(): Api {
     addDocument: async () => { throw 'The browser preview cannot keep files.' },
     documentBytes: async () => { throw 'The browser preview cannot keep files.' },
     saveDocumentTo: async () => { throw 'The browser preview cannot keep files.' },
+    // The preview has no file dialog: "choosing a file" gives a made-up sample.
+    importPick: async (person) => {
+      const subject = { reference: `Patient/${person}` }
+      const pending: Pending = {
+        person,
+        fileName: 'sample-summary.json',
+        candidates: [
+          { resource: { resourceType: 'Condition', subject, code: { text: 'Sample condition' }, onsetDateTime: '2015-03-01' }, duplicateOf: null },
+          { resource: { resourceType: 'Immunization', patient: subject, status: 'completed', vaccineCode: { text: 'Sample vaccine' }, occurrenceDateTime: '2025-10-04' }, duplicateOf: null },
+        ],
+        skipped: [['Practitioner', 1]],
+      }
+      settings.set('import.pending', pending)
+      return clone(pending)
+    },
+    importPending: async () => clone((settings.get('import.pending') as Pending | undefined) ?? null),
+    importAccept: async (picks) => {
+      const p = settings.get('import.pending') as Pending | undefined
+      settings.delete('import.pending')
+      const chosen = (p?.candidates ?? []).filter((_, i) => picks.includes(i))
+      if (!chosen.length) return 0
+      change(`import of ${chosen.length} record${chosen.length === 1 ? '' : 's'}`, () => {
+        for (const c of chosen) {
+          const r = clone(c.resource)
+          r.id = crypto.randomUUID()
+          r.meta = { lastUpdated: new Date().toISOString() }
+          rows.set(r.id, { r })
+        }
+      })
+      return chosen.length
+    },
+    importDiscard: async () => void settings.delete('import.pending'),
     inspectBackup: async () => { throw 'The browser preview has no backups to restore.' },
     restoreBackup: async () => { throw 'The browser preview has no backups to restore.' },
     updateStatus: async () => ({ kind: 'other', canInstall: false, current: 'preview', previous: null, mode: (settings.get('updates.mode') as UpdateMode) ?? 'ask' }),

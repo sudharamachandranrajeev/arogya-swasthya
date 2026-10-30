@@ -4,6 +4,7 @@
 
 mod data;
 mod docs;
+mod import;
 mod update;
 
 use std::path::{Path, PathBuf};
@@ -490,6 +491,10 @@ pub fn run() {
             docs::add_document,
             docs::document_bytes,
             docs::save_document_to,
+            import::import_pick,
+            import::import_pending,
+            import::import_accept,
+            import::import_discard,
             update::update_status,
             update::set_update_mode,
             update::open_page,

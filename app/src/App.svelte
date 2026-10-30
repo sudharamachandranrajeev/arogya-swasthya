@@ -6,6 +6,7 @@
   import FileText from '@lucide/svelte/icons/file-text'
   import FolderOpen from '@lucide/svelte/icons/folder-open'
   import History from '@lucide/svelte/icons/history'
+  import ImportIcon from '@lucide/svelte/icons/import'
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard'
   import ListChecks from '@lucide/svelte/icons/list-checks'
   import MapPin from '@lucide/svelte/icons/map-pin'
@@ -16,6 +17,7 @@
   import SettingsIcon from '@lucide/svelte/icons/settings'
   import Documents from './lib/Documents.svelte'
   import Home from './lib/Home.svelte'
+  import Import from './lib/Import.svelte'
   import Lock from './lib/Lock.svelte'
   import { allergy, condition, medication, procedure, result, vaccine } from './lib/model/fhir.ts'
   import { emergencyLine } from './lib/model/places.ts'
@@ -36,6 +38,7 @@
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
     { id: 'results', label: 'Results', icon: Activity },
     { id: 'documents', label: 'Documents', icon: FolderOpen },
+    { id: 'import', label: 'Import', icon: ImportIcon },
     { id: 'timeline', label: 'Timeline', icon: History },
     { id: 'body', label: 'Body', icon: PersonStanding },
     { id: 'care', label: 'Find care', icon: MapPin },
@@ -120,6 +123,10 @@
           <h1>Documents</h1>
           <p class="lead">{session.personName}'s letters, reports, scans, photos and recordings, encrypted on this device.</p>
           <Documents />
+        {:else if page === 'import'}
+          <h1>Import</h1>
+          <p class="lead">Bring in records from a clinic, a hospital or another health app.</p>
+          <Import />
         {:else if page === 'timeline'}
           <h1>Timeline</h1>
           <p class="lead">Everything in {session.personName}'s record, newest first.</p>
