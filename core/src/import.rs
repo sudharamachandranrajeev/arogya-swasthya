@@ -83,6 +83,16 @@ pub fn read(store: &Store, bytes: &[u8], person: &str) -> std::result::Result<Fo
             serde_json::from_slice(bytes).map_err(|e| Problem::Unreadable(e.to_string()))?;
         entries(&root)?
     };
+    review(store, resources, person)
+}
+
+/// Fit resources read elsewhere (a SMART Health Link, say) to `person` and
+/// flag ones the store already has.
+pub fn review(
+    store: &Store,
+    resources: Vec<Value>,
+    person: &str,
+) -> std::result::Result<Found, Problem> {
     let mut skipped: Vec<(String, usize)> = Vec::new();
     let mut taken = Vec::new();
     for r in &resources {
@@ -136,7 +146,7 @@ fn kept_keys(store: &Store, person: &str, taken: &[Value]) -> Result<HashMap<Str
 }
 
 /// The resources in a Bundle (any type, IPS included), or the one resource.
-fn entries(root: &Value) -> std::result::Result<Vec<Value>, Problem> {
+pub(crate) fn entries(root: &Value) -> std::result::Result<Vec<Value>, Problem> {
     match root["resourceType"].as_str() {
         Some("Bundle") => Ok(root["entry"]
             .as_array()

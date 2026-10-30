@@ -6,6 +6,7 @@ pub mod fhir;
 pub mod files;
 pub mod import;
 pub mod keys;
+pub mod shl;
 pub mod store;
 
 pub use store::{Error, Result, Store};

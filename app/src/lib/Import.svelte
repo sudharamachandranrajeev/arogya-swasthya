@@ -3,7 +3,7 @@
   // (FHIR JSON, such as an International Patient Summary, or C-CDA XML). Nothing is kept
   // until the user ticks what they want; one Undo takes the whole import back.
   import { Button, Card, Row } from '@swasthya/ui'
-  import { api, type Pending } from './api.ts'
+  import { api, inApp, type LinkInfo, type Pending } from './api.ts'
   import { kindOf, type Resource } from './model/fhir.ts'
   import { session } from './session.svelte.ts'
 
@@ -25,6 +25,35 @@
       if (p) show(p)
     } catch (e) {
       session.fail(e)
+    } finally {
+      busy = false
+    }
+  }
+
+  // ---- a SMART Health Link ----
+  let link = $state('')
+  let passcode = $state('')
+  let info = $state<LinkInfo | null>(null)
+  let linkProblem = $state('')
+  $effect(() => {
+    const l = link.trim()
+    info = null
+    linkProblem = ''
+    if (!l || !inApp) return
+    api.linkInfo(l).then((i) => (info = i), (e) => (linkProblem = String(e)))
+  })
+  const expired = $derived(!!info?.exp && info.exp * 1000 < Date.now())
+
+  async function fetchLink(e: SubmitEvent) {
+    e.preventDefault()
+    busy = true
+    try {
+      const p = await api.importLink(session.current, link.trim(), info?.needsPasscode ? passcode : null)
+      if (p) show(p)
+      link = ''
+      passcode = ''
+    } catch (err) {
+      session.fail(err)
     } finally {
       busy = false
     }
@@ -74,6 +103,30 @@
       <Button disabled={busy} onclick={pick}>{busy ? 'Reading…' : 'Choose a file'}</Button>
     </div>
   </Card>
+  <div class="gap"></div>
+  <Card title="Open a SMART Health Link" explain="A link (often shown as a QR code) to records kept encrypted on a server. The key is in the link, so the server cannot read them.">
+    <form onsubmit={fetchLink} novalidate>
+      <div class="field">
+        <label for="shl">The link</label>
+        <input id="shl" bind:value={link} placeholder="shlink:/… or a web address ending in #shlink:/…" autocomplete="off" spellcheck="false" />
+      </div>
+      {#if linkProblem}
+        <p class="muted small" role="alert">{linkProblem}</p>
+      {:else if info}
+        <p class="small">{info.label ?? 'Health records'} · from {new URL(info.url).host}{info.exp ? ` · ${expired ? 'expired' : 'works until'} ${new Date(info.exp * 1000).toLocaleDateString()}` : ''}</p>
+        {#if info.needsPasscode}
+          <div class="field">
+            <label for="shl-pass">Passcode (given to you with the link)</label>
+            <input id="shl-pass" type="password" bind:value={passcode} autocomplete="off" />
+          </div>
+        {/if}
+      {/if}
+      <p class="muted small">This contacts the server named in the link, and only that server.</p>
+      <div class="actions">
+        <Button type="submit" disabled={busy || !info || expired || (info.needsPasscode && !passcode)}>{busy ? 'Fetching…' : 'Fetch and review'}</Button>
+      </div>
+    </form>
+  </Card>
 {:else}
   <Card title={`From ${pending.fileName}`}>
     {#snippet action()}<Button variant="ghost" disabled={busy} onclick={discard}>Discard</Button>{/snippet}
@@ -106,5 +159,6 @@
   .pick :global(.row) { flex: 1; }
   .small { font-size: var(--text-small); }
   .note { padding: 8px 12px; border-radius: var(--r-sm); background: var(--c-accent-soft); }
+  .gap { height: 18px; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 </style>

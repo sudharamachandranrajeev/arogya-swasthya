@@ -96,6 +96,16 @@ export interface Pending {
   skipped: [string, number][]
 }
 
+/** What a SMART Health Link says, before anything is fetched. */
+export interface LinkInfo {
+  url: string
+  /** Seconds since 1970 after which the link stops working. */
+  exp: number | null
+  label: string | null
+  needsPasscode: boolean
+  direct: boolean
+}
+
 export type Page = 'releases' | 'bug' | 'idea'
 
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
@@ -125,6 +135,9 @@ export interface Api {
   /** Save the candidates at these places as one change. Returns how many. */
   importAccept(picks: number[]): Promise<number>
   importDiscard(): Promise<void>
+  linkInfo(link: string): Promise<LinkInfo>
+  /** Fetch what a SMART Health Link holds into a review list. */
+  importLink(person: string, link: string, passcode: string | null): Promise<Pending | null>
   inspectBackup(name: string | null, recovery: string | null): Promise<BackupSummary>
   restoreBackup(name: string | null, recovery: string | null): Promise<string>
   updateStatus(): Promise<UpdateStatus>
@@ -171,6 +184,8 @@ const tauri: Api = {
   importPending: () => invoke('import_pending'),
   importAccept: (picks) => invoke('import_accept', { picks }),
   importDiscard: () => invoke('import_discard'),
+  linkInfo: (link) => invoke('link_info', { link }),
+  importLink: (person, link, passcode) => invoke('import_link', { person, link, passcode }),
   inspectBackup: (name, recovery) => invoke('inspect_backup', { name, recovery }),
   restoreBackup: (name, recovery) => invoke('restore_backup', { name, recovery }),
   updateStatus: () => invoke('update_status'),
@@ -279,6 +294,8 @@ function memory(): Api {
       return chosen.length
     },
     importDiscard: async () => void settings.delete('import.pending'),
+    linkInfo: async () => { throw 'The browser preview cannot open links.' },
+    importLink: async () => { throw 'The browser preview cannot open links.' },
     inspectBackup: async () => { throw 'The browser preview has no backups to restore.' },
     restoreBackup: async () => { throw 'The browser preview has no backups to restore.' },
     updateStatus: async () => ({ kind: 'other', canInstall: false, current: 'preview', previous: null, mode: (settings.get('updates.mode') as UpdateMode) ?? 'ask' }),

@@ -495,6 +495,8 @@ pub fn run() {
             import::import_pending,
             import::import_accept,
             import::import_discard,
+            import::link_info,
+            import::import_link,
             update::update_status,
             update::set_update_mode,
             update::open_page,
