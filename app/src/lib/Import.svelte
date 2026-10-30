@@ -1,6 +1,6 @@
 <script lang="ts">
   // Bring in records from a file from a clinic, hospital or another app
-  // (FHIR JSON, such as an International Patient Summary). Nothing is kept
+  // (FHIR JSON, such as an International Patient Summary, or C-CDA XML). Nothing is kept
   // until the user ticks what they want; one Undo takes the whole import back.
   import { Button, Card, Row } from '@swasthya/ui'
   import { api, type Pending } from './api.ts'
@@ -68,7 +68,7 @@
 
 {#if !pending}
   <Card title="Import a file" explain="A health record file you were given or downloaded, such as a patient summary from a clinic or another app. You see everything in it before anything is kept.">
-    <p>Choose a <strong>FHIR JSON</strong> file. That includes an <strong>International Patient Summary</strong> (IPS). The records go into <strong>{session.personName}'s</strong> records once you choose which to keep.</p>
+    <p>Choose a <strong>FHIR JSON</strong> file, such as an <strong>International Patient Summary</strong> (IPS), or a <strong>C-CDA</strong> summary (an XML file from many US hospitals and patient portals). The records go into <strong>{session.personName}'s</strong> records once you choose which to keep.</p>
     <p class="muted small">The file is read on this device. Nothing is sent anywhere.</p>
     <div class="actions">
       <Button disabled={busy} onclick={pick}>{busy ? 'Reading…' : 'Choose a file'}</Button>

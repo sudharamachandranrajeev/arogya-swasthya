@@ -1,6 +1,7 @@
-//! Importing records from a file (FHIR JSON, an IPS). The file is read into
-//! a review list kept in the encrypted database, so it survives leaving the
-//! screen; the user ticks what to keep and those are saved as one change.
+//! Importing records from a file (FHIR JSON, an IPS, a C-CDA document). The
+//! file is read into a review list kept in the encrypted database, so it
+//! survives leaving the screen; the user ticks what to keep and those are
+//! saved as one change.
 
 use std::io::Read;
 
@@ -37,7 +38,10 @@ pub async fn import_pick(
         .dialog()
         .file()
         .set_title("Choose a health record file to import")
-        .add_filter("Health records (FHIR JSON)", &["json"]);
+        .add_filter(
+            "Health records (FHIR JSON, C-CDA)",
+            &["json", "xml", "ccd", "cda"],
+        );
     let Some(path) = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file())
         .await
         .map_err(err)?
@@ -53,7 +57,7 @@ pub async fn import_pick(
         })
         .map_err(|e| format!("That file could not be read ({e})."))?;
     let read = state.with(|s| {
-        let found = match import::read_fhir(s, &bytes, &person) {
+        let found = match import::read(s, &bytes, &person) {
             Ok(found) => found,
             Err(import::Problem::Store(e)) => return Err(e),
             Err(problem) => return Ok(Err(capital(&problem.to_string()))),

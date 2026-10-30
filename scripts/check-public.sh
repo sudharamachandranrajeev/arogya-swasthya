@@ -34,8 +34,9 @@ corpus() {
 text="$(corpus | grep -av '^Binary files' || true)"
 
 # Private and Tailscale IPv4 addresses. Network names like 10.0.0.0/8 and the
-# documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) pass.
-ips="$(printf '%s\n' "$text" | grep -aoE '\b(10|100|172|192)\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b(/[0-9]+)?' |
+# documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) pass,
+# and so do longer dotted ids such as HL7 OIDs (2.16.840.1.113883.10.20.22.2.5).
+ips="$(printf '%s\n' "$text" | grep -aoP '(?<![0-9.])(10|100|172|192)\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(?![0-9]|\.[0-9])(/[0-9]+)?' |
   grep -vE '/[0-9]+$' | grep -vE '^(192\.0\.2|198\.51\.100|203\.0\.113)\.' |
   awk -F. '($1==10)||($1==100&&$2>=64&&$2<128)||($1==172&&$2>=16&&$2<32)||($1==192&&$2==168)' | sort -u || true)"
 [[ -z $ips ]] || flag "private or tailnet addresses: $(tr '\n' ' ' <<<"$ips")"

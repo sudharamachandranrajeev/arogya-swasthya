@@ -1,5 +1,6 @@
 //! Reading records from files people get elsewhere: FHIR R4 JSON (a Bundle
-//! or one resource), which includes an International Patient Summary (IPS).
+//! or one resource), which includes an International Patient Summary (IPS),
+//! and C-CDA documents (see [`ccda`](crate::ccda)).
 //! Nothing is saved here. The result is a list for the user to review; what
 //! they accept is saved with [`Store::save_all`](crate::Store::save_all).
 //!
@@ -13,8 +14,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use crate::fhir;
 use crate::store::{Result, Store};
+use crate::{ccda, fhir};
 
 /// Largest file read, and most records taken from it.
 pub const MAX_BYTES: usize = 20 * 1024 * 1024;
@@ -43,8 +44,8 @@ const CODES: &[&str] = &[
 pub enum Problem {
     #[error("this file is larger than 20 MB")]
     TooLarge,
-    #[error("this is not a FHIR JSON file ({0})")]
-    NotFhir(String),
+    #[error("this is not a FHIR JSON or C-CDA file ({0})")]
+    Unreadable(String),
     #[error("nothing in this file can be kept here yet (it holds: {0})")]
     Nothing(String),
     #[error(transparent)]
@@ -69,14 +70,19 @@ pub struct Found {
     pub skipped: Vec<(String, usize)>,
 }
 
-/// Read a FHIR JSON file into records for `person`, flagging ones the store
-/// already has.
-pub fn read_fhir(store: &Store, bytes: &[u8], person: &str) -> std::result::Result<Found, Problem> {
+/// Read a FHIR JSON or C-CDA file into records for `person`, flagging ones
+/// the store already has.
+pub fn read(store: &Store, bytes: &[u8], person: &str) -> std::result::Result<Found, Problem> {
     if bytes.len() > MAX_BYTES {
         return Err(Problem::TooLarge);
     }
-    let root: Value = serde_json::from_slice(bytes).map_err(|e| Problem::NotFhir(e.to_string()))?;
-    let resources = entries(&root)?;
+    let resources = if ccda::is_xml(bytes) {
+        ccda::resources(bytes).map_err(Problem::Unreadable)?
+    } else {
+        let root: Value =
+            serde_json::from_slice(bytes).map_err(|e| Problem::Unreadable(e.to_string()))?;
+        entries(&root)?
+    };
     let mut skipped: Vec<(String, usize)> = Vec::new();
     let mut taken = Vec::new();
     for r in &resources {
@@ -141,7 +147,7 @@ fn entries(root: &Value) -> std::result::Result<Vec<Value>, Problem> {
             })
             .unwrap_or_default()),
         Some(_) => Ok(vec![root.clone()]),
-        None => Err(Problem::NotFhir("it has no resourceType".into())),
+        None => Err(Problem::Unreadable("it has no resourceType".into())),
     }
 }
 
@@ -377,7 +383,7 @@ mod tests {
             .unwrap()
             .to_string();
         let bytes = serde_json::to_vec(&ips("Patient/x1")).unwrap();
-        let found = read_fhir(&s, &bytes, &me).unwrap();
+        let found = read(&s, &bytes, &me).unwrap();
         assert_eq!(found.candidates.len(), 3);
         let skipped: Vec<&str> = found.skipped.iter().map(|(t, _)| t.as_str()).collect();
         assert_eq!(
@@ -410,7 +416,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(saved.len(), 3);
-        let again = read_fhir(&s, &bytes, &me).unwrap();
+        let again = read(&s, &bytes, &me).unwrap();
         assert!(again.candidates.iter().all(|c| c.duplicate_of.is_some()));
         s.undo().unwrap();
         assert!(s.timeline(&me).unwrap().is_empty());
@@ -437,7 +443,7 @@ mod tests {
             {"resource": {"resourceType": "Procedure", "status": "completed", "code": {"text": "Sample procedure"},
                 "performedPeriod": {"start": "2019-05-06", "end": "2019-05-07"}}}
         ]});
-        let found = read_fhir(&s, &serde_json::to_vec(&bundle).unwrap(), &me).unwrap();
+        let found = read(&s, &serde_json::to_vec(&bundle).unwrap(), &me).unwrap();
         let [a, b, c] = &found.candidates[..] else {
             panic!("three records")
         };
@@ -453,26 +459,53 @@ mod tests {
     }
 
     #[test]
+    fn reads_a_ccda_document_the_same_way() {
+        let mut s = Store::memory().unwrap();
+        let me = s
+            .save(
+                json!({"resourceType": "Patient", "name": [{"text": "Test Person"}]}),
+                Timestamp::UNIX_EPOCH,
+            )
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let found = read(&s, crate::ccda::tests::SAMPLE.as_bytes(), &me).unwrap();
+        assert_eq!(found.candidates.len(), 7);
+        let person = format!("Patient/{me}");
+        for c in &found.candidates {
+            let r = &c.resource;
+            assert!(r["subject"]["reference"] == person || r["patient"]["reference"] == person);
+        }
+        let saved = s
+            .save_all(
+                found.candidates.into_iter().map(|c| c.resource).collect(),
+                "import",
+                Timestamp::UNIX_EPOCH,
+            )
+            .unwrap();
+        assert_eq!(saved.len(), 7);
+        assert_eq!(s.search(Some(&me), "penicillin", 5).unwrap().len(), 1);
+    }
+
+    #[test]
     fn says_plainly_what_it_cannot_read() {
         let s = Store::memory().unwrap();
         assert!(matches!(
-            read_fhir(&s, b"<xml/>", "p"),
-            Err(Problem::NotFhir(_))
+            read(&s, b"<xml/>", "p"),
+            Err(Problem::Unreadable(_))
         ));
-        assert!(matches!(
-            read_fhir(&s, b"{}", "p"),
-            Err(Problem::NotFhir(_))
-        ));
+        assert!(matches!(read(&s, b"{}", "p"), Err(Problem::Unreadable(_))));
         let only = serde_json::to_vec(
             &json!({"resourceType": "Bundle", "entry": [{"resource": {"resourceType": "Claim"}}]}),
         )
         .unwrap();
         assert_eq!(
-            read_fhir(&s, &only, "p").unwrap_err().to_string(),
+            read(&s, &only, "p").unwrap_err().to_string(),
             "nothing in this file can be kept here yet (it holds: 1 Claim)"
         );
         assert!(matches!(
-            read_fhir(&s, &vec![b' '; MAX_BYTES + 1], "p"),
+            read(&s, &vec![b' '; MAX_BYTES + 1], "p"),
             Err(Problem::TooLarge)
         ));
     }

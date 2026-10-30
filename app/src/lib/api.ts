@@ -119,7 +119,7 @@ export interface Api {
   addDocument(doc: Resource): Promise<Resource | null>
   documentBytes(id: string): Promise<ArrayBuffer>
   saveDocumentTo(id: string, target: string): Promise<void>
-  /** Ask for a FHIR JSON file and read it into a review list. Null when cancelled. */
+  /** Ask for a FHIR JSON or C-CDA file and read it into a review list. Null when cancelled. */
   importPick(person: string): Promise<Pending | null>
   importPending(): Promise<Pending | null>
   /** Save the candidates at these places as one change. Returns how many. */
