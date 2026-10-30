@@ -25,7 +25,7 @@ impl App {
 
     /// Where a file can be read from: the vault, or else the copy next to the
     /// second backup folder (after a restore on a new device, say).
-    fn file_home(&self, id: &str) -> CommandResult<PathBuf> {
+    pub(crate) fn file_home(&self, id: &str) -> CommandResult<PathBuf> {
         let main = self.files_dir();
         if files::path(&main, id).map_err(err)?.exists() {
             return Ok(main);
@@ -69,6 +69,8 @@ pub async fn add_document(
     let saved = state.with(|s| s.add_document(doc, &sealed, content_type, &name, now()));
     if saved.is_err() {
         let _ = files::remove(&state.files_dir(), &sealed.id);
+    } else {
+        crate::text::start(&app);
     }
     saved.map(Some)
 }

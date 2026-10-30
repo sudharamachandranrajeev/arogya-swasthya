@@ -1,3 +1,15 @@
 [workspace]
 resolver = "3"
 members = ["core", "plugins/device", "app/src-tauri"]
+
+# The OCR engine is far too slow unoptimised; build it optimised even in
+# debug builds, so `tauri dev` and tests stay usable.
+[profile.dev.package]
+ocrs.opt-level = 3
+rten.opt-level = 3
+rten-base.opt-level = 3
+rten-gemm.opt-level = 3
+rten-imageproc.opt-level = 3
+rten-simd.opt-level = 3
+rten-tensor.opt-level = 3
+rten-vecmath.opt-level = 3

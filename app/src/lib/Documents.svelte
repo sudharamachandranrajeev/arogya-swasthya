@@ -2,7 +2,7 @@
   // One person's documents: add a file with a few words about it, look at it
   // inside the app, save a copy out, edit what it is, delete (with Undo).
   import { Button, Card, Explain, Row } from '@swasthya/ui'
-  import { api, inApp } from './api.ts'
+  import { api, inApp, type OcrStatus } from './api.ts'
   import DateField from './DateField.svelte'
   import { attachment, check, document, toFhir, type Resource, type Values } from './model/fhir.ts'
   import RecordForm from './RecordForm.svelte'
@@ -21,6 +21,32 @@
     if (!person) return
     api.records(person, document.type).then((r) => (rows = r), session.fail.bind(session))
   })
+
+  // ---- reading photos and scans (OCR) ----
+  let ocr = $state<OcrStatus | null>(null)
+  let fetching = $state(false)
+  $effect(() => {
+    void session.version
+    api.ocrStatus().then((s) => (ocr = s), () => {})
+  })
+  // While documents are being read, check again every few seconds.
+  $effect(() => {
+    if (ocr?.mode !== 'on' || !ocr.waiting) return
+    const t = setTimeout(() => api.ocrStatus().then((s) => (ocr = s), () => {}), 3000)
+    return () => clearTimeout(t)
+  })
+  async function setOcr(on: boolean) {
+    fetching = on
+    try {
+      await api.setOcr(on)
+      ocr = await api.ocrStatus()
+      if (on) session.say({ text: 'Reading photos and scans is on. Their words appear in Search as they are read.' })
+    } catch (e) {
+      session.fail(e)
+    } finally {
+      fetching = false
+    }
+  }
 
   async function add(e: SubmitEvent) {
     e.preventDefault()
@@ -160,6 +186,24 @@
     </div>
   {/if}
 </Card>
+
+{#if ocr && rows.length && !adding && !editing}
+  <div class="gap"></div>
+  {#if ocr.mode === null}
+    <Card title="Find documents by their words?">
+      <p>The app can read the words in photos and scanned letters, so Search finds them. It reads on this device: your documents are never sent anywhere.</p>
+      <p class="muted small">This needs a reading model, downloaded once (about 12 MB) from the <a href="https://github.com/robertknight/ocrs" target="_blank" rel="noreferrer">ocrs</a> project. Latin-alphabet languages only for now. PDFs with their own text are searchable either way.</p>
+      <div class="actions">
+        <Button disabled={fetching} onclick={() => setOcr(true)}>{fetching ? 'Downloading…' : 'Yes, download it'}</Button>
+        <Button variant="ghost" disabled={fetching} onclick={() => setOcr(false)}>Not now</Button>
+      </div>
+    </Card>
+  {:else if ocr.mode === 'off'}
+    <p class="muted small">Words in photos and scans are not read, so Search cannot find them. <button class="link" disabled={fetching} onclick={() => setOcr(true)}>{fetching ? 'Downloading the reading model…' : 'Read them (downloads 12 MB once)'}</button></p>
+  {:else if ocr.waiting > 0}
+    <p class="muted small">Reading the words in {ocr.waiting} document{ocr.waiting === 1 ? '' : 's'} for Search…</p>
+  {/if}
+{/if}
 
 {#if shown}
   <div class="gap"></div>

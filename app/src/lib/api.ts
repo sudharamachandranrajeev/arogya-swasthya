@@ -106,6 +106,13 @@ export interface LinkInfo {
   direct: boolean
 }
 
+export interface OcrStatus {
+  /** Reading photos and scans: on, off, or not chosen yet. */
+  mode: 'on' | 'off' | null
+  /** Documents whose words are not read yet. */
+  waiting: number
+}
+
 export type Page = 'releases' | 'bug' | 'idea'
 
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
@@ -128,6 +135,9 @@ export interface Api {
   /** Ask for a file, encrypt it and save `doc` pointing at it. Null when cancelled. */
   addDocument(doc: Resource): Promise<Resource | null>
   documentBytes(id: string): Promise<ArrayBuffer>
+  ocrStatus(): Promise<OcrStatus>
+  /** On downloads the reading models first (about 12 MB, once). */
+  setOcr(on: boolean): Promise<void>
   saveDocumentTo(id: string, target: string): Promise<void>
   /** Ask for a FHIR JSON or C-CDA file and read it into a review list. Null when cancelled. */
   importPick(person: string): Promise<Pending | null>
@@ -179,6 +189,8 @@ const tauri: Api = {
   pickBackup: () => invoke('pick_backup'),
   addDocument: (doc) => invoke('add_document', { doc }),
   documentBytes: (id) => invoke('document_bytes', { id }),
+  ocrStatus: () => invoke('ocr_status'),
+  setOcr: (on) => invoke('set_ocr', { on }),
   saveDocumentTo: (id, target) => invoke('save_document_to', { id, target }),
   importPick: (person) => invoke('import_pick', { person }),
   importPending: () => invoke('import_pending'),
@@ -261,6 +273,8 @@ function memory(): Api {
     pickBackup: async () => { throw 'The browser preview has no backups to restore.' },
     addDocument: async () => { throw 'The browser preview cannot keep files.' },
     documentBytes: async () => { throw 'The browser preview cannot keep files.' },
+    ocrStatus: async () => ({ mode: (settings.get('ocr.mode') as OcrStatus['mode']) ?? null, waiting: 0 }),
+    setOcr: async (on) => void settings.set('ocr.mode', on ? 'on' : 'off'),
     saveDocumentTo: async () => { throw 'The browser preview cannot keep files.' },
     // The preview has no file dialog: "choosing a file" gives a made-up sample.
     importPick: async (person) => {

@@ -504,6 +504,17 @@ impl Store {
             .collect::<rusqlite::Result<_>>()?)
     }
 
+    /// Files whose text has not been read yet, newest first.
+    pub fn files_without_text(&self) -> Result<Vec<FileRow>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT id FROM files WHERE text IS NULL ORDER BY added_at DESC, id")?;
+        let ids: Vec<String> = st
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        ids.iter().map(|id| self.file(id)).collect()
+    }
+
     /// Forget files no record or undo step mentions any more, once they are
     /// older than [`TRASH_DAYS`]. Returns their ids, for removal from the
     /// vault. (A file whose record was undone or purged ends here.)
@@ -1263,8 +1274,10 @@ mod tests {
             .add_document(doc, &sealed, "image/png", "scan.png", at(NOW))
             .unwrap();
         assert!(s.search(Some(&a), "ferritin", 10).unwrap().is_empty());
+        assert_eq!(s.files_without_text().unwrap()[0].id, sealed.id);
         s.set_file_text(&sealed.id, "Ferritin 12 ug/L, low")
             .unwrap();
+        assert!(s.files_without_text().unwrap().is_empty());
         assert_eq!(
             ids(s.search(Some(&a), "ferritin", 10).unwrap()),
             vec![saved["id"].as_str().unwrap().to_string()]

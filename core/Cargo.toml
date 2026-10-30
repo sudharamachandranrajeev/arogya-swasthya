@@ -12,8 +12,12 @@ base64 = "0.23"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
 flate2 = "1"
 getrandom = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "gif"] }
 jiff = { version = "0.2", features = ["serde"] }
+ocrs = "0.13"
+pdf-extract = "0.12"
 roxmltree = "0.21.2"
+rten = { version = "0.26", default-features = false, features = ["onnx_format"] }
 rusqlite = { version = "0.37", features = ["bundled-sqlcipher-vendored-openssl"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -5,6 +5,7 @@
 mod data;
 mod docs;
 mod import;
+mod text;
 mod update;
 
 use std::path::{Path, PathBuf};
@@ -467,6 +468,7 @@ pub fn run() {
             state.open(&handle);
             // Backups need no unlock: they copy the encrypted data as it is.
             state.maintain();
+            text::start(&handle);
             #[cfg(desktop)]
             upkeep_loop(handle);
             Ok(())
@@ -497,6 +499,8 @@ pub fn run() {
             import::import_discard,
             import::link_info,
             import::import_link,
+            text::ocr_status,
+            text::set_ocr,
             update::update_status,
             update::set_update_mode,
             update::open_page,

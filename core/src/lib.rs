@@ -2,6 +2,7 @@
 //! Tauri shell and tests drive it.
 
 pub mod ccda;
+pub mod extract;
 pub mod fhir;
 pub mod files;
 pub mod import;
