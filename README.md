@@ -42,9 +42,23 @@ Status: **alpha**. The records screens, backups and updates work; the features l
   person, each file encrypted with its own key.
 - 🔎 **Search everything** – records, the words in PDFs, and (if you allow it) the words in
   photos, scans and recordings, read on your device.
-- 📥 **Bring your records in** – open a FHIR or IPS file, a C-CDA document from a hospital
+- 📥 **Bring your records in** – open a FHIR, NDJSON or IPS file, a C-CDA document from a hospital
   portal, or a SMART Health Link. You see every record and tick the ones to keep; ones you
   already have are marked. One **Undo** takes the whole import back.
+- 💓 **Track how you are** – put in blood pressure, pulse, weight, blood sugar and other readings
+  together, and rate symptoms from 0 to 10.
+- 📈 **Trends** – a chart for each reading, result and symptom, with the lab's normal range
+  shaded and a table view. **Patterns** shows readings that changed together, how sure it is,
+  and that this does not show a cause.
+- ⏰ **Medicine reminders** – add the times to a medicine and the app reminds you, and once more
+  30 minutes later if the dose is not marked. Quiet hours, and reminders say only "Time for a
+  medicine" unless you choose to show names. Marking a second dose within two hours asks first.
+- 🧮 **Calculators** – BMI, waist to height, kidney function (eGFR), pack-years and alcohol
+  units, filled in from your records, each showing its formula and source.
+- 🩺 **Doctor report** – choose what to share and the period, add a note, and save a PDF for an
+  appointment. Made on the device.
+- 📤 **Take your records anywhere** – save a patient summary (IPS) other health apps and clinics
+  can read, or every record as a FHIR file.
 - 🧪 **Test results that make sense** – copy the lab's normal range and the app shows whether
   each result is in range.
 - 📅 **Dates the way you remember them** – pick a day from a calendar, or just a month or a year
@@ -60,7 +74,7 @@ Status: **alpha**. The records screens, backups and updates work; the features l
 - 🎨 **Three looks, light or dark** – Sage, Aurora and Journal, a calm mode with less motion,
   or make your own.
 
-Coming in later versions: reminders, a 3D body map, finding care near you, exercise plans,
+Coming in later versions: a 3D body map, finding care near you, exercise plans,
 photo series, care plans and optional AI help.
 
 ## 📸 Screenshots
@@ -161,6 +175,11 @@ flowchart LR
   Hugging Face, desktop only). Each is checked against a fixed fingerprint. Opening a SMART
   Health Link fetches the records from the server named in the link; they arrive encrypted and
   are decrypted on your device.
+- **Reminders:** set up on the device by the app; nothing is sent to a server. A reminder says
+  only "Time for a medicine" unless you turn on names in **Medicines → Today**.
+- **Exports and reports:** a doctor report or an export saved with **Settings → Export** is a
+  normal file, not encrypted. Keep it somewhere private, and delete it when it is no longer
+  needed.
 - **Backups:** one a day, the newest 14 kept, in the app's folder and in your chosen folder.
   One more before each update (the newest 3 kept) and before each restore.
   **Settings → Backups → Save a backup as…** saves one anywhere you like.
@@ -235,6 +254,23 @@ Go to **Settings → Updates → Report a problem** (or **Suggest a feature**). 
 GitHub form with the app version, your system and the last three error messages filled in. Words
 from your records are removed from those messages. You see everything before you press Submit.
 Please do not put names or health details in the report.
+</details>
+
+<details>
+<summary><b>Why does the app stay running after I close it?</b></summary>
+
+On a computer, while medicine reminders are on, closing the window keeps the app in the tray
+so reminders can still come, and the app starts at login. Choose **Quit** from the tray icon to
+close it fully. Turn reminders off in **Medicines → Today** to stop both.
+</details>
+
+<details>
+<summary><b>How do I move my records to another app or show them to a clinic?</b></summary>
+
+For an appointment, use **Doctor report**: it makes a PDF with only the parts you choose. For
+another health app, use **Settings → Export → Save … summary**: it saves an International
+Patient Summary (IPS), the FHIR format many apps and clinics read. **Save … records** saves every
+record as one FHIR file instead.
 </details>
 
 <details>
@@ -314,6 +350,9 @@ will not see it.
   [Symphonia](https://github.com/pdeljanov/Symphonia) (MPL-2.0, used unchanged) to decode
   recordings
 - [roxmltree](https://github.com/RazrFalcon/roxmltree) for C-CDA documents
+- [Typst](https://typst.app) through [typst-as-lib](https://github.com/Relacibo/typst-as-lib)
+  for the doctor report, set in [Libertinus Serif](https://github.com/alerque/libertinus)
+  (SIL Open Font License, bundled in `app/src-tauri/fonts`)
 - [Lucide](https://lucide.dev) icons
 - [Inter](https://rsms.me/inter/), [Fraunces](https://github.com/undercasetype/Fraunces),
   [Space Grotesk](https://github.com/floriankarsten/space-grotesk) and

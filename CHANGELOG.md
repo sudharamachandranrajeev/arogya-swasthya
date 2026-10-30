@@ -14,6 +14,26 @@ The records vault:
   record goes to a review list first, with ones you already have marked and unticked. One Undo
   removes the whole import.
 
+Tracking and reports:
+
+- Track vital signs (blood pressure, pulse, weight, temperature, oxygen level, blood sugar,
+  breathing rate, height, waist) several at once, and symptoms on a 0 to 10 scale. Readings
+  outside plausible limits are refused as typing slips.
+- Trends: a chart for every reading, result and symptom recorded at least twice, with the lab's
+  normal range shaded, a readout by mouse or arrow keys, and a table view. Patterns shows
+  readings that changed together, with how many days it rests on and how strong it is, and says
+  it does not show a cause.
+- Medicine reminders: times on each medicine, a Today list to mark doses taken or skipped, a
+  second reminder 30 minutes later, quiet hours, and no medicine names unless you choose. A
+  second "taken" within two hours asks first. On a computer the app stays in the tray and starts
+  at login while reminders are on; phones use system alarms for the next 48 hours.
+- Calculators: BMI (with the lower NICE cut-offs), waist to height, eGFR (CKD-EPI 2021, no race
+  term), pack-years and alcohol units, filled in from your records.
+- Doctor report: a PDF with the sections and period you choose and a note, made on the device
+  with Typst.
+- Export a patient summary (IPS) or every record as a FHIR Bundle from Settings → Export.
+  Import reads NDJSON files too.
+
 ## [0.1.0]
 
 The first release (alpha). Installers for Windows, Linux and Android.
