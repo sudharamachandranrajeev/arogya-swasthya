@@ -12,6 +12,7 @@
   import Palette from '@lucide/svelte/icons/palette'
   import PersonStanding from '@lucide/svelte/icons/person-standing'
   import PillIcon from '@lucide/svelte/icons/pill'
+  import SearchIcon from '@lucide/svelte/icons/search'
   import SettingsIcon from '@lucide/svelte/icons/settings'
   import Documents from './lib/Documents.svelte'
   import Home from './lib/Home.svelte'
@@ -19,6 +20,7 @@
   import { allergy, condition, medication, procedure, result, vaccine } from './lib/model/fhir.ts'
   import { emergencyLine } from './lib/model/places.ts'
   import RecordList from './lib/RecordList.svelte'
+  import Search from './lib/Search.svelte'
   import { session } from './lib/session.svelte.ts'
   import Settings from './lib/Settings.svelte'
   import Timeline from './lib/Timeline.svelte'
@@ -29,6 +31,7 @@
 
   const items: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'search', label: 'Search', icon: SearchIcon },
     { id: 'records', label: 'Records', icon: FileText },
     { id: 'medicines', label: 'Medicines', icon: PillIcon },
     { id: 'results', label: 'Results', icon: Activity },
@@ -109,6 +112,10 @@
           <h1>Results</h1>
           <p class="lead">Test results with the lab's normal range. Outside the range is not always a problem: ask the person who ordered the test.</p>
           <RecordList kind={result} />
+        {:else if page === 'search'}
+          <h1>Search</h1>
+          <p class="lead">Find anything in the records by the words in it, including words read from documents.</p>
+          <Search />
         {:else if page === 'documents'}
           <h1>Documents</h1>
           <p class="lead">{session.personName}'s letters, reports, scans, photos and recordings, encrypted on this device.</p>

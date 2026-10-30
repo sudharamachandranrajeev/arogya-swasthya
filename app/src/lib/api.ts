@@ -76,6 +76,11 @@ export interface RollbackPlan {
   needsRestore: boolean
 }
 
+export interface Hit {
+  resource: Resource
+  snippet: string
+}
+
 export type Page = 'releases' | 'bug' | 'idea'
 
 export type UiSetting = 'places' | 'terms.accepted' | 'setup.done' | 'person.current'
@@ -113,6 +118,8 @@ export interface Api {
   people(): Promise<Resource[]>
   records(person: string, kind: string): Promise<Resource[]>
   timeline(person: string): Promise<Resource[]>
+  /** Best matches first; `snippet` marks each match between \u0002 and \u0003. */
+  search(person: string | null, words: string): Promise<Hit[]>
   save(resource: Resource): Promise<Resource>
   remove(id: string): Promise<void>
   restore(id: string): Promise<void>
@@ -153,6 +160,7 @@ const tauri: Api = {
   people: () => invoke('people'),
   records: (person, kind) => invoke('records', { person, kind }),
   timeline: (person) => invoke('timeline', { person }),
+  search: (person, words) => invoke('search', { person, words }),
   save: (resource) => invoke('save_record', { resource }),
   remove: (id) => invoke('delete_record', { id }),
   restore: (id) => invoke('restore_record', { id }),
@@ -227,6 +235,14 @@ function memory(): Api {
     putSetting: async (key, value) => void settings.set(key, clone(value)),
     people: async () => live().filter((r) => r.resourceType === 'Patient'),
     records: async (person, kind) => live().filter((r) => r.resourceType === kind && personOf(r) === person).sort(newest),
+    search: async (person, words) => {
+      const ws = words.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+      if (!ws.length) return []
+      return live()
+        .filter((r) => r.resourceType !== 'Patient' && (!person || personOf(r) === person))
+        .filter((r) => { const t = JSON.stringify(r).toLowerCase(); return ws.every((w) => t.includes(w)) })
+        .map((resource) => ({ resource, snippet: '' }))
+    },
     timeline: async (person) => live().filter((r) => r.resourceType !== 'Patient' && personOf(r) === person).sort(newest),
     save: async (resource) => {
       const r = clone(resource)

@@ -367,6 +367,16 @@ fn timeline(state: State<App>, person: String) -> CommandResult<Vec<Value>> {
     state.with(|s| s.timeline(&person))
 }
 
+/// Records holding every word typed, best first; one person or everyone.
+#[tauri::command]
+fn search(
+    state: State<App>,
+    person: Option<String>,
+    words: String,
+) -> CommandResult<Vec<store::Hit>> {
+    state.with(|s| s.search(person.as_deref(), &words, 50))
+}
+
 #[tauri::command]
 fn save_record(state: State<App>, resource: Value) -> CommandResult<Value> {
     state.with(|s| s.save(resource, now()))
@@ -492,6 +502,7 @@ pub fn run() {
             people,
             records,
             timeline,
+            search,
             save_record,
             delete_record,
             restore_record,

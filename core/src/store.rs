@@ -99,11 +99,58 @@ const MIGRATIONS: &[&str] = &[
         name TEXT NOT NULL,
         added_at INTEGER NOT NULL
     );
-",
-];
+", "
+    ALTER TABLE files ADD COLUMN text TEXT;
+    CREATE VIRTUAL TABLE search USING fts5(
+        body, record_id UNINDEXED, person_id UNINDEXED,
+        tokenize = 'unicode61 remove_diacritics 2'
+    );
+    CREATE TRIGGER search_add AFTER INSERT ON records WHEN new.deleted_at IS NULL BEGIN
+        INSERT INTO search (body, record_id, person_id) VALUES (
+        coalesce((SELECT group_concat(value, ' ') FROM json_tree(new.json)
+            WHERE type = 'text' AND key NOT IN ('id', 'reference', 'url', 'system', 'lastUpdated', 'resourceType', 'status', 'contentType')), '')
+        || ' ' || coalesce((SELECT group_concat(f.text, ' ') FROM files f
+            WHERE f.text IS NOT NULL AND instr(new.json, 'swasthya-file:' || f.id) > 0), ''), new.id, new.person_id);
+    END;
+    CREATE TRIGGER search_change AFTER UPDATE ON records BEGIN
+        DELETE FROM search WHERE record_id = old.id;
+        INSERT INTO search (body, record_id, person_id) SELECT
+        coalesce((SELECT group_concat(value, ' ') FROM json_tree(new.json)
+            WHERE type = 'text' AND key NOT IN ('id', 'reference', 'url', 'system', 'lastUpdated', 'resourceType', 'status', 'contentType')), '')
+        || ' ' || coalesce((SELECT group_concat(f.text, ' ') FROM files f
+            WHERE f.text IS NOT NULL AND instr(new.json, 'swasthya-file:' || f.id) > 0), ''), new.id, new.person_id WHERE new.deleted_at IS NULL;
+    END;
+    CREATE TRIGGER search_drop AFTER DELETE ON records BEGIN
+        DELETE FROM search WHERE record_id = old.id;
+    END;
+    CREATE TRIGGER search_file_text AFTER UPDATE OF text ON files BEGIN
+        DELETE FROM search WHERE record_id IN
+            (SELECT id FROM records WHERE instr(json, 'swasthya-file:' || new.id) > 0);
+        INSERT INTO search (body, record_id, person_id) SELECT
+        coalesce((SELECT group_concat(value, ' ') FROM json_tree(r.json)
+            WHERE type = 'text' AND key NOT IN ('id', 'reference', 'url', 'system', 'lastUpdated', 'resourceType', 'status', 'contentType')), '')
+        || ' ' || coalesce((SELECT group_concat(f.text, ' ') FROM files f
+            WHERE f.text IS NOT NULL AND instr(r.json, 'swasthya-file:' || f.id) > 0), ''), r.id, r.person_id
+        FROM records r WHERE r.deleted_at IS NULL AND instr(r.json, 'swasthya-file:' || new.id) > 0;
+    END;
+    INSERT INTO search (body, record_id, person_id) SELECT
+        coalesce((SELECT group_concat(value, ' ') FROM json_tree(r.json)
+            WHERE type = 'text' AND key NOT IN ('id', 'reference', 'url', 'system', 'lastUpdated', 'resourceType', 'status', 'contentType')), '')
+        || ' ' || coalesce((SELECT group_concat(f.text, ' ') FROM files f
+            WHERE f.text IS NOT NULL AND instr(r.json, 'swasthya-file:' || f.id) > 0), ''), r.id, r.person_id
+        FROM records r WHERE r.deleted_at IS NULL;
+"];
 
 /// How a DocumentReference points at its file in the vault.
 pub const FILE_URL: &str = "swasthya-file:";
+
+/// One search result: the record and a piece of its text around the words
+/// found, with each match between \u{2} and \u{3}.
+#[derive(Debug, Clone, Serialize)]
+pub struct Hit {
+    pub resource: Value,
+    pub snippet: String,
+}
 
 /// A file kept in the vault, as the database knows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -447,6 +494,50 @@ impl Store {
         }
         tx.commit()?;
         Ok(ids)
+    }
+
+    /// Records (not in the trash) whose text holds every word of `words`,
+    /// as word beginnings, best match first. `person` limits it to one
+    /// person. Document text found by OCR or transcripts is searched too.
+    pub fn search(&self, person: Option<&str>, words: &str, limit: usize) -> Result<Vec<Hit>> {
+        let query: Vec<String> = words
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .take(12)
+            .map(|w| format!("\"{w}\"*"))
+            .collect();
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut st = self.conn.prepare(
+            "SELECT r.json, snippet(search, 0, char(2), char(3), '…', 12) FROM search
+             JOIN records r ON r.id = search.record_id
+             WHERE search MATCH ?1 AND (?2 IS NULL OR search.person_id = ?2)
+             ORDER BY bm25(search) LIMIT ?3",
+        )?;
+        let rows = st.query_map(params![query.join(" "), person, limit as i64], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        rows.map(|row| {
+            let (json, snippet) = row?;
+            Ok(Hit {
+                resource: serde_json::from_str(&json)?,
+                snippet: snippet.split_whitespace().collect::<Vec<_>>().join(" "),
+            })
+        })
+        .collect()
+    }
+
+    /// Keep text read from a file (OCR, PDF text, a transcript); its records
+    /// become findable by it.
+    pub fn set_file_text(&mut self, id: &str, text: &str) -> Result<()> {
+        let n = self
+            .conn
+            .execute("UPDATE files SET text = ? WHERE id = ?", params![text, id])?;
+        if n == 0 {
+            return Err(Error::NotFound(id.into()));
+        }
+        Ok(())
     }
 
     /// Remove trash and undo history older than [`TRASH_DAYS`].
@@ -1100,5 +1191,82 @@ mod tests {
                 .is_err()
         );
         assert!(s.file_ids().unwrap().is_empty());
+    }
+
+    #[test]
+    fn search_finds_words_follows_changes_and_reads_file_text() {
+        let vault = tempfile::tempdir().unwrap();
+        let mut s = Store::memory().unwrap();
+        let a = person(&mut s, "Test Person");
+        let b = person(&mut s, "Other Person");
+        let asthma = condition(&mut s, &a, "Asthma", "2015");
+        condition(&mut s, &b, "Asthmatic bronchitis", "2020");
+        let ids = |hits: Vec<Hit>| -> Vec<String> {
+            hits.iter()
+                .map(|h| h.resource["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(
+            ids(s.search(Some(&a), "asth", 10).unwrap()),
+            vec![asthma.clone()]
+        );
+        assert_eq!(s.search(None, "asth", 10).unwrap().len(), 2);
+        assert!(s.search(None, "\"*:) OR", 10).unwrap().is_empty());
+        let hit = &s.search(Some(&a), "asthma", 10).unwrap()[0];
+        assert!(hit.snippet.contains('\u{2}') && hit.snippet.contains("Asthma"));
+
+        // Edits, the trash and undo all keep the index right.
+        let mut c = s.get(&asthma).unwrap();
+        c["code"]["text"] = json!("Hay fever");
+        s.save(c, at(NOW)).unwrap();
+        assert!(s.search(Some(&a), "asthma", 10).unwrap().is_empty());
+        assert_eq!(s.search(Some(&a), "hay fever", 10).unwrap().len(), 1);
+        s.delete(&asthma, at(NOW)).unwrap();
+        assert!(s.search(Some(&a), "hay", 10).unwrap().is_empty());
+        s.undo().unwrap();
+        assert_eq!(s.search(Some(&a), "hay", 10).unwrap().len(), 1);
+
+        // Text read from a document's file makes the document findable.
+        let sealed = crate::files::seal(vault.path(), &b"scan"[..]).unwrap();
+        let doc = json!({"resourceType": "DocumentReference", "subject": {"reference": format!("Patient/{a}")}, "description": "Scan"});
+        let saved = s
+            .add_document(doc, &sealed, "image/png", "scan.png", at(NOW))
+            .unwrap();
+        assert!(s.search(Some(&a), "ferritin", 10).unwrap().is_empty());
+        s.set_file_text(&sealed.id, "Ferritin 12 ug/L, low")
+            .unwrap();
+        assert_eq!(
+            ids(s.search(Some(&a), "ferritin", 10).unwrap()),
+            vec![saved["id"].as_str().unwrap().to_string()]
+        );
+        // Ids, links and statuses are not searchable words.
+        assert!(s.search(None, "swasthya", 10).unwrap().is_empty());
+        assert!(s.search(None, "current", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn search_survives_an_encrypted_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = Store::memory().unwrap();
+        let a = person(&mut s, "Test Person");
+        condition(&mut s, &a, "Migraine", "2019");
+        let copy = dir.path().join("copy.db");
+        s.export(&copy, &KEY).unwrap();
+        let mut c = Store::open(&copy, &KEY).unwrap();
+        assert_eq!(c.search(Some(&a), "migraine", 10).unwrap().len(), 1);
+        condition(&mut c, &a, "Migraine with aura", "2021");
+        assert_eq!(c.search(Some(&a), "migraine", 10).unwrap().len(), 2);
+        // Closed, as a backup is, so the change is in the main file.
+        drop(c);
+        let back = dir.path().join("back.db");
+        restore_copy(&copy, &KEY, &back, &KEY).unwrap();
+        assert_eq!(
+            Store::open(&back, &KEY)
+                .unwrap()
+                .search(None, "aura", 10)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }
