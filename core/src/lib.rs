@@ -6,6 +6,7 @@ pub mod extract;
 pub mod fhir;
 pub mod files;
 pub mod import;
+pub mod ips;
 pub mod keys;
 pub mod shl;
 pub mod store;

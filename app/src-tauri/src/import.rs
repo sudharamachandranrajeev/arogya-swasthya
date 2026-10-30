@@ -41,8 +41,8 @@ pub async fn import_pick(
         .file()
         .set_title("Choose a health record file to import")
         .add_filter(
-            "Health records (FHIR JSON, C-CDA)",
-            &["json", "xml", "ccd", "cda"],
+            "Health records (FHIR JSON or NDJSON, C-CDA)",
+            &["json", "ndjson", "xml", "ccd", "cda"],
         );
     let Some(path) = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file())
         .await

@@ -203,7 +203,9 @@ export interface Api {
   restore(id: string): Promise<void>
   trash(): Promise<Trashed[]>
   undo(): Promise<string | null>
-  exportBundle(person: string | null): Promise<Resource>
+  /** Save a readable copy at `target`: a FHIR Bundle of everyone (person
+   *  null) or one person, or one person's International Patient Summary. */
+  saveExport(what: 'bundle' | 'ips', person: string | null, target: string): Promise<void>
   reminderSettings(): Promise<ReminderSettings>
   /** Asks for permission to notify when turning reminders on. */
   setReminders(settings: ReminderSettings): Promise<void>
@@ -271,7 +273,7 @@ const tauri: Api = {
   restore: (id) => invoke('restore_record', { id }),
   trash: () => invoke('trash'),
   undo: () => invoke('undo'),
-  exportBundle: (person) => invoke('export_bundle', { person }),
+  saveExport: (what, person, target) => invoke('save_export', { what, person, target }),
 }
 
 // ---- browser preview ----
@@ -437,11 +439,7 @@ function memory(): Api {
       rows = last.rows
       return last.label
     },
-    exportBundle: async (person) => ({
-      resourceType: 'Bundle',
-      type: 'collection',
-      entry: live().filter((r) => !person || personOf(r) === person).map((resource) => ({ resource })),
-    }),
+    saveExport: async () => {},
     reminderSettings: async () => clone((settings.get('reminders') as ReminderSettings | undefined) ?? { on: false, names: false, quiet: null }),
     setReminders: async (s) => void settings.set('reminders', clone(s)),
     dosesToday: async () => {

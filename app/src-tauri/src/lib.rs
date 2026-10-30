@@ -419,10 +419,29 @@ fn undo(state: State<App>) -> CommandResult<Option<String>> {
     state.with(|s| Ok(s.undo()?.map(|u| u.label)))
 }
 
-/// Everything (or one person's records) as a FHIR Bundle.
+/// Save a readable copy where the user chose: everything (or one person's
+/// records) as a FHIR Bundle, or one person's International Patient Summary.
 #[tauri::command]
-fn export_bundle(state: State<App>, person: Option<String>) -> CommandResult<Value> {
-    state.with(|s| s.export_bundle(person.as_deref(), now()))
+fn save_export(
+    app: AppHandle,
+    state: State<App>,
+    what: String,
+    person: Option<String>,
+    target: String,
+) -> CommandResult<()> {
+    use std::io::Write;
+    let bundle = match (what.as_str(), person.as_deref()) {
+        ("bundle", p) => state.with(|s| s.export_bundle(p, now()))?,
+        ("ips", Some(p)) => state.with(|s| s.export_ips(p, now()))?,
+        _ => return Err("Choose what to export.".into()),
+    };
+    let mut out = std::io::BufWriter::new(
+        docs::create_target(&app, &target).map_err(|e| format!("Could not save it there: {e}"))?,
+    );
+    serde_json::to_writer_pretty(&mut out, &bundle)
+        .map_err(std::io::Error::from)
+        .and_then(|()| out.flush())
+        .map_err(|e| format!("Could not save the copy: {e}"))
 }
 
 /// Desktop: re-check the daily jobs every hour while the app runs.
@@ -562,7 +581,7 @@ pub fn run() {
             restore_record,
             trash,
             undo,
-            export_bundle,
+            save_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Arogya Swasthya");

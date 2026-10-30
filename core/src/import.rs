@@ -1,5 +1,6 @@
-//! Reading records from files people get elsewhere: FHIR R4 JSON (a Bundle
-//! or one resource), which includes an International Patient Summary (IPS),
+//! Reading records from files people get elsewhere: FHIR R4 JSON (a Bundle,
+//! one resource, or NDJSON with one resource per line), which includes an
+//! International Patient Summary (IPS),
 //! and C-CDA documents (see [`ccda`](crate::ccda)).
 //! Nothing is saved here. The result is a list for the user to review; what
 //! they accept is saved with [`Store::save_all`](crate::Store::save_all).
@@ -79,9 +80,15 @@ pub fn read(store: &Store, bytes: &[u8], person: &str) -> std::result::Result<Fo
     let resources = if ccda::is_xml(bytes) {
         ccda::resources(bytes).map_err(Problem::Unreadable)?
     } else {
-        let root: Value =
-            serde_json::from_slice(bytes).map_err(|e| Problem::Unreadable(e.to_string()))?;
-        entries(&root)?
+        // One JSON value, or several in a row: NDJSON, as FHIR bulk export
+        // writes (one resource per line).
+        let mut all = Vec::new();
+        for root in serde_json::Deserializer::from_slice(bytes).into_iter::<Value>() {
+            all.extend(entries(
+                &root.map_err(|e| Problem::Unreadable(e.to_string()))?,
+            )?);
+        }
+        all
     };
     review(store, resources, person)
 }
@@ -378,6 +385,65 @@ mod tests {
             {"resource": {"resourceType": "Immunization", "id": "i1", "patient": {"reference": person_ref}, "status": "completed",
                 "vaccineCode": {"text": "Influenza"}, "occurrenceDateTime": "2025-10-04"}}
         ]})
+    }
+
+    #[test]
+    fn reads_ndjson_one_resource_per_line() {
+        let s = Store::memory().unwrap();
+        let me = s.people().unwrap().len().to_string();
+        let lines = [
+            json!({"resourceType": "Condition", "subject": {"reference": "Patient/x1"}, "code": {"text": "Asthma"}}),
+            json!({"resourceType": "Immunization", "patient": {"reference": "Patient/x1"}, "status": "completed",
+                "vaccineCode": {"text": "Influenza"}, "occurrenceDateTime": "2025-10-04"}),
+        ];
+        let ndjson = format!("{}\n\n{}\n", lines[0], lines[1]);
+        let found = read(&s, ndjson.as_bytes(), &me).unwrap();
+        assert_eq!(found.candidates.len(), 2);
+        assert!(matches!(
+            read(&s, b"{\"resourceType\": \"Condition\"}\n{oops", &me),
+            Err(Problem::Unreadable(_))
+        ));
+    }
+
+    #[test]
+    fn our_own_patient_summary_reads_back_in() {
+        let mut s = Store::memory().unwrap();
+        let now = Timestamp::UNIX_EPOCH;
+        let me = s
+            .save(
+                json!({"resourceType": "Patient", "name": [{"text": "Test Person"}]}),
+                now,
+            )
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let found = read(&s, &serde_json::to_vec(&ips("Patient/x1")).unwrap(), &me).unwrap();
+        s.save_all(
+            found.candidates.into_iter().map(|c| c.resource).collect(),
+            "import",
+            now,
+        )
+        .unwrap();
+
+        let summary = serde_json::to_vec(&s.export_ips(&me, now).unwrap()).unwrap();
+        let other = s
+            .save(
+                json!({"resourceType": "Patient", "name": [{"text": "Someone Else"}]}),
+                now,
+            )
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let back = read(&s, &summary, &other).unwrap();
+        assert_eq!(back.candidates.len(), 3);
+        assert!(back.candidates.iter().all(|c| c.duplicate_of.is_none()));
+        let again = read(&s, &summary, &me).unwrap();
+        assert!(
+            again.candidates.iter().all(|c| c.duplicate_of.is_some()),
+            "same records, same person"
+        );
     }
 
     #[test]

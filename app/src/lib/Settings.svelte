@@ -1,5 +1,5 @@
 <script lang="ts">
-  // People, places, security, backups, updates and the trash.
+  // People, places, security, backups, exports, updates and the trash.
   import { Button, Card, Row, Segmented } from '@swasthya/ui'
   import { api, inApp, type BackupKind, type Backups, type BackupSummary, type Trashed } from './api.ts'
   import { kindOf, patient, type Resource } from './model/fhir.ts'
@@ -8,17 +8,26 @@
   import { session } from './session.svelte.ts'
   import UpdatesPanel from './UpdatesPanel.svelte'
 
-  type Tab = 'people' | 'places' | 'security' | 'backups' | 'updates' | 'trash'
+  type Tab = 'people' | 'places' | 'security' | 'backups' | 'export' | 'updates' | 'trash'
   let tab = $state<Tab>('people')
   const tabs: { value: Tab; label: string }[] = [
     { value: 'people', label: 'People' },
     { value: 'places', label: 'Places' },
     { value: 'security', label: 'Security' },
     { value: 'backups', label: 'Backups' },
+    { value: 'export', label: 'Export' },
     { value: 'updates', label: 'Updates' },
     { value: 'trash', label: 'Trash' },
   ]
   const phone = $derived(['android', 'ios'].includes(session.status?.platform ?? ''))
+
+  /** Save a readable FHIR file where the user chooses. */
+  async function exportAs(what: 'bundle' | 'ips', person: string | null, name: string) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const target = await save({ title: 'Save the file', defaultPath: `${name}, ${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'FHIR JSON', extensions: ['json'] }] })
+    if (!target) return
+    await act(() => api.saveExport(what, person, target), 'Saved. That file is not encrypted: keep it somewhere private.')
+  }
 
   async function act(f: () => Promise<unknown>, done?: string) {
     try {
@@ -292,6 +301,23 @@
       {/if}
     {/if}
   </Card>
+
+{:else if tab === 'export'}
+  <Card title="Patient summary (IPS)" explain="The International Patient Summary is a standard FHIR document other health apps and clinics can read: medicines, allergies, problems, vaccines, procedures, test results and vital signs.">
+    <p>One file with {session.personName}'s summary. Symptoms and documents are not part of it.</p>
+    <div class="actions">
+      <Button disabled={!session.current} onclick={() => exportAs('ips', session.current, `Patient summary, ${session.personName}`)}>Save {session.personName}'s summary</Button>
+    </div>
+  </Card>
+  <div class="gap"></div>
+  <Card title="Every record (FHIR Bundle)" explain="Every record as one FHIR R4 file, to move to another app or to keep a copy you can read without this app. Documents themselves stay here; their details are included.">
+    <div class="actions">
+      <Button variant="quiet" disabled={!session.current} onclick={() => exportAs('bundle', session.current, `Records, ${session.personName}`)}>Save {session.personName}'s records</Button>
+      <Button variant="quiet" onclick={() => exportAs('bundle', null, 'Records, everyone')}>Save everyone's records</Button>
+    </div>
+  </Card>
+  <div class="gap"></div>
+  <p class="muted small">These files are not encrypted, unlike backups: anyone who has one can read it. To import into another copy of this app, use Import there.</p>
 
 {:else if tab === 'updates'}
   <UpdatesPanel />
