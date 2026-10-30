@@ -26,6 +26,7 @@
   import Home from './lib/Home.svelte'
   import Import from './lib/Import.svelte'
   import Lock from './lib/Lock.svelte'
+  import Photos from './lib/Photos.svelte'
   import { allergy, condition, medication, procedure, result, symptom, vaccine } from './lib/model/fhir.ts'
   import { emergencyLine } from './lib/model/places.ts'
   import RecordList from './lib/RecordList.svelte'
@@ -65,7 +66,6 @@
   const later: Record<string, string> = {
     care: 'Finding care near you, with every source checked and shown.',
     exercise: 'Exercise plans that respect your injuries and conditions.',
-    photos: 'Body photo series with consistent light and angle checks.',
     plan: 'A care plan for life: screenings, vaccines and follow-ups.',
   }
 
@@ -144,6 +144,10 @@
           <h1>Body</h1>
           <p class="lead">Where {session.personName}'s conditions and operations are. Drag to turn, pinch or scroll to zoom, tap a part to see its records.</p>
           <Body />
+        {:else if page === 'photos'}
+          <h1>Photos</h1>
+          <p class="lead">Photos of one part of {session.personName}'s body over time, taken the same way each time so they compare.</p>
+          <Photos />
         {:else if page === 'calc'}
           <h1>Calculators</h1>
           <p class="lead">Worked out on this device from {session.personName}'s newest records. Change any number to try another. These are screening numbers, not a diagnosis.</p>

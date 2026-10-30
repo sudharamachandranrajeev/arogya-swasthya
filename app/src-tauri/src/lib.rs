@@ -545,6 +545,7 @@ pub fn run() {
             data::inspect_backup,
             data::restore_backup,
             docs::add_document,
+            docs::add_photo,
             docs::document_bytes,
             docs::save_document_to,
             import::import_pick,

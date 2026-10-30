@@ -3,11 +3,13 @@
   // records as a list beside it. The viewer (and three.js) loads only here.
   import { Card, Pill } from '@swasthya/ui'
   import { api } from './api.ts'
-  import { byRegion, firstYear, labelOf, place, type Tone } from './model/body.ts'
+  import { byRegion, firstYear, labelOf, place, regionsOfSite, type Tone } from './model/body.ts'
   import { condition, kindOf, procedure, type Resource } from './model/fhir.ts'
+  import { isBodyPhoto, siteOf } from './model/photo.ts'
   import { session } from './session.svelte.ts'
 
   let records = $state<Resource[]>([])
+  let photos = $state<Resource[]>([])
   let selected = $state<string | null>(null)
   let skin = $state(true)
   const thisYear = new Date().getFullYear()
@@ -17,8 +19,9 @@
     void session.version
     const person = session.current
     if (!person) return
-    Promise.all([api.records(person, 'Condition'), api.records(person, 'Procedure')]).then(([c, p]) => {
+    Promise.all([api.records(person, 'Condition'), api.records(person, 'Procedure'), api.records(person, 'DocumentReference')]).then(([c, p, d]) => {
       records = [...c, ...p]
+      photos = d.filter(isBodyPhoto)
     }, session.fail.bind(session))
   })
 
@@ -31,6 +34,7 @@
   const gender = $derived(String(session.person?.gender ?? ''))
   const hidden = $derived(gender === 'female' ? ['prostate'] : gender === 'male' ? ['uterus', 'ovary-r', 'ovary-l'] : [])
   const here = $derived(selected ? regions.get(selected) : undefined)
+  const photosHere = $derived(selected ? photos.filter((p) => regionsOfSite(siteOf(p)).includes(selected!)).length : 0)
 
   const TONES: [Tone, string][] = [
     ['danger', 'Active'],
@@ -83,7 +87,7 @@
         {:else}
           <p class="muted">Nothing recorded here{year < thisYear ? ` as of ${year}` : ''}.</p>
         {/if}
-        <p><a href="#/records">Open Records</a></p>
+        <p><a href="#/records">Open Records</a>{#if photosHere} · <a href="#/photos">{photosHere} {photosHere === 1 ? 'photo' : 'photos'} of this part</a>{/if}</p>
       </Card>
     {:else}
       <Card title="On the body" explain="Each condition and operation with a part of the body. Tap a part on the body, or a name here, to see its records. Conditions without a part are placed by name when the name points to one place, such as asthma and the lungs.">

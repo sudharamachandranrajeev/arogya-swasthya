@@ -5,6 +5,7 @@
   import { api, inApp, type TextStatus } from './api.ts'
   import DateField from './DateField.svelte'
   import { attachment, check, document, toFhir, type Resource, type Values } from './model/fhir.ts'
+  import { isBodyPhoto } from './model/photo.ts'
   import RecordForm from './RecordForm.svelte'
   import { session } from './session.svelte.ts'
 
@@ -19,7 +20,8 @@
     void session.version
     const person = session.current
     if (!person) return
-    api.records(person, document.type).then((r) => (rows = r), session.fail.bind(session))
+    // Body photos have their own page.
+    api.records(person, document.type).then((r) => (rows = r.filter((d) => !isBodyPhoto(d))), session.fail.bind(session))
   })
 
   // ---- reading photos and scans (OCR) and transcribing recordings ----

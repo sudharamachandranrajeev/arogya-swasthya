@@ -75,6 +75,47 @@ pub async fn add_document(
     saved.map(Some)
 }
 
+/// Largest photo taken in the app; the screen scales photos down well below this.
+const PHOTO_MAX: usize = 20 * 1024 * 1024;
+
+/// Save a photo taken or prepared in the app. The body is the record's JSON
+/// length (4 bytes, big-endian), the record (a DocumentReference without its
+/// content), then the JPEG.
+#[tauri::command]
+pub fn add_photo(state: State<App>, request: tauri::ipc::Request) -> CommandResult<Value> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("The photo did not arrive.".into());
+    };
+    let (doc, jpeg) = split_photo(body)?;
+    let sealed = files::seal(&state.files_dir(), jpeg)
+        .map_err(|e| format!("Could not store the photo: {e}"))?;
+    let name = format!("Photo {}.jpg", now().strftime("%Y-%m-%d %H%M"));
+    let saved = state.with(|s| s.add_document(doc, &sealed, "image/jpeg", &name, now()));
+    if saved.is_err() {
+        let _ = files::remove(&state.files_dir(), &sealed.id);
+    }
+    saved
+}
+
+fn split_photo(body: &[u8]) -> Result<(Value, &[u8]), String> {
+    let bad = || "The photo did not arrive whole.".to_string();
+    if body.len() > PHOTO_MAX {
+        return Err("This photo is too large.".into());
+    }
+    let len = u32::from_be_bytes(
+        body.get(..4)
+            .ok_or_else(bad)?
+            .try_into()
+            .map_err(|_| bad())?,
+    ) as usize;
+    let json = body.get(4..4 + len).ok_or_else(bad)?;
+    let jpeg = &body[4 + len..];
+    if !jpeg.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Err("That is not a JPEG photo.".into());
+    }
+    Ok((serde_json::from_slice(json).map_err(|_| bad())?, jpeg))
+}
+
 /// The plain bytes of a document, to show it inside the app.
 #[tauri::command]
 pub fn document_bytes(state: State<App>, id: String) -> CommandResult<Response> {
@@ -191,5 +232,25 @@ mod tests {
         assert_eq!(file_name(&p), "Letter 2026.PDF");
         assert_eq!(content_type(&file_name(&p)), "application/pdf");
         assert_eq!(content_type("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn a_photo_body_splits_into_record_and_jpeg() {
+        let doc = br#"{"resourceType":"DocumentReference"}"#;
+        let mut body = (doc.len() as u32).to_be_bytes().to_vec();
+        body.extend_from_slice(doc);
+        body.extend_from_slice(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2]);
+        let (v, jpeg) = split_photo(&body).unwrap();
+        assert_eq!(v["resourceType"], "DocumentReference");
+        assert_eq!(jpeg.len(), 6);
+
+        assert!(split_photo(&body[..3]).is_err());
+        let mut png = body.clone();
+        let at = 4 + doc.len();
+        png[at] = 0x89;
+        assert!(split_photo(&png).is_err());
+        let mut long = body.clone();
+        long[3] = 200;
+        assert!(split_photo(&long).is_err());
     }
 }

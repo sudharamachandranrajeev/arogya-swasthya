@@ -165,6 +165,8 @@ export interface Api {
   /** Ask for a file, encrypt it and save `doc` pointing at it. Null when cancelled. */
   addDocument(doc: Resource): Promise<Resource | null>
   documentBytes(id: string): Promise<ArrayBuffer>
+  /** Save a JPEG taken or prepared in the app, encrypted like any document. */
+  addPhoto(doc: Resource, jpeg: ArrayBuffer): Promise<Resource>
   textStatus(): Promise<TextStatus>
   /** On downloads the reading models first (about 12 MB, once). */
   setOcr(on: boolean): Promise<void>
@@ -236,6 +238,7 @@ const tauri: Api = {
   pickBackup: () => invoke('pick_backup'),
   addDocument: (doc) => invoke('add_document', { doc }),
   documentBytes: (id) => invoke('document_bytes', { id }),
+  addPhoto: (doc, jpeg) => invoke('add_photo', photoBody(doc, jpeg)),
   textStatus: () => invoke('text_status'),
   setOcr: (on) => invoke('set_ocr', { on }),
   setTranscribe: (on) => invoke('set_transcribe', { on }),
@@ -298,6 +301,7 @@ function memory(): Api {
   type Row = { r: Resource; deletedAt?: string }
   let rows = new Map<string, Row>()
   const settings = new Map<string, unknown>()
+  const photos = new Map<string, ArrayBuffer>()
   const history: { label: string; rows: Map<string, Row> }[] = []
   const recovery = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0'))
     .join('')
@@ -327,7 +331,21 @@ function memory(): Api {
     saveBackupTo: async () => { throw 'The browser preview cannot write backups.' },
     pickBackup: async () => { throw 'The browser preview has no backups to restore.' },
     addDocument: async () => { throw 'The browser preview cannot keep files.' },
-    documentBytes: async () => { throw 'The browser preview cannot keep files.' },
+    // Photos stay in memory, so the Photos page can be tried in the preview.
+    documentBytes: async (id) => {
+      const f = photos.get(id)
+      if (!f) throw 'The browser preview cannot keep files.'
+      return f
+    },
+    addPhoto: async (doc, jpeg) => {
+      const id = crypto.randomUUID()
+      photos.set(id, jpeg)
+      const r = clone(doc)
+      r.id = crypto.randomUUID()
+      r.content = [{ attachment: { contentType: 'image/jpeg', url: `swasthya-file:${id}`, size: jpeg.byteLength, title: 'Photo.jpg' } }]
+      change(`add photo`, () => rows.set(r.id!, { r }))
+      return r
+    },
     textStatus: async () => ({
       ocr: (settings.get('ocr.mode') as Choice) ?? null,
       transcribe: (settings.get('transcribe.mode') as Choice) ?? null,
@@ -468,6 +486,16 @@ function memory(): Api {
     refreshReminders: async () => {},
     saveReport: async () => void settings.set('report.saved', true),
   }
+}
+
+/** The add_photo body: the record's JSON length (4 bytes, big-endian), the record, the JPEG. */
+function photoBody(doc: Resource, jpeg: ArrayBuffer): Uint8Array {
+  const json = new TextEncoder().encode(JSON.stringify(doc))
+  const out = new Uint8Array(4 + json.length + jpeg.byteLength)
+  new DataView(out.buffer).setUint32(0, json.length)
+  out.set(json, 4)
+  out.set(new Uint8Array(jpeg), 4 + json.length)
+  return out
 }
 
 export const api: Api = inApp ? tauri : memory()
