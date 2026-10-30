@@ -38,6 +38,13 @@ Status: **alpha**. The records screens, backups and updates work; the features l
   and test results, typed in your own words with suggestions as you go.
 - 👨‍👩‍👧 **Records for the whole family** – add a parent, a child or anyone you care for, and switch
   between them.
+- 📎 **Documents, encrypted** – keep letters, reports, scans, photos and recordings with each
+  person, each file encrypted with its own key.
+- 🔎 **Search everything** – records, the words in PDFs, and (if you allow it) the words in
+  photos, scans and recordings, read on your device.
+- 📥 **Bring your records in** – open a FHIR or IPS file, a C-CDA document from a hospital
+  portal, or a SMART Health Link. You see every record and tick the ones to keep; ones you
+  already have are marked. One **Undo** takes the whole import back.
 - 🧪 **Test results that make sense** – copy the lab's normal range and the app shows whether
   each result is in range.
 - 📅 **Dates the way you remember them** – pick a day from a calendar, or just a month or a year
@@ -149,6 +156,11 @@ flowchart LR
   open that folder.
 - **What leaves the device:** no records, ever. If you allow it, the app asks GitHub once at
   start whether a new version is out (GitHub sees your internet address, nothing else).
+- **What the app downloads, only when you say yes:** the reading model for photos and scans
+  (about 12 MB, from the ocrs project) and the speech model for recordings (about 60 MB, from
+  Hugging Face, desktop only). Each is checked against a fixed fingerprint. Opening a SMART
+  Health Link fetches the records from the server named in the link; they arrive encrypted and
+  are decrypted on your device.
 - **Backups:** one a day, the newest 14 kept, in the app's folder and in your chosen folder.
   One more before each update (the newest 3 kept) and before each restore.
   **Settings → Backups → Save a backup as…** saves one anywhere you like.
@@ -294,6 +306,14 @@ will not see it.
 - [Tauri](https://tauri.app), [Svelte](https://svelte.dev) and [Rust](https://www.rust-lang.org)
 - [SQLCipher](https://www.zetetic.net/sqlcipher/) through [rusqlite](https://github.com/rusqlite/rusqlite)
 - [HL7 FHIR R4](https://hl7.org/fhir/R4/) for the record format
+- [ocrs](https://github.com/robertknight/ocrs) and [RTen](https://github.com/robertknight/rten)
+  for reading photos and scans, [pdf-extract](https://github.com/jrmuizel/pdf-extract) for PDF
+  text
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) through
+  [whisper-rs](https://codeberg.org/tazz4843/whisper-rs) for transcripts, and
+  [Symphonia](https://github.com/pdeljanov/Symphonia) (MPL-2.0, used unchanged) to decode
+  recordings
+- [roxmltree](https://github.com/RazrFalcon/roxmltree) for C-CDA documents
 - [Lucide](https://lucide.dev) icons
 - [Inter](https://rsms.me/inter/), [Fraunces](https://github.com/undercasetype/Fraunces),
   [Space Grotesk](https://github.com/floriankarsten/space-grotesk) and

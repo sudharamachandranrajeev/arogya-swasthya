@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+The records vault:
+
+- Documents for each person: letters, reports, scans, photos and recordings, each file encrypted
+  with its own key. Look at them inside the app, save a copy out, edit what they are, delete with
+  Undo.
+- Search across records and the words in documents. PDFs with their own text are searchable at
+  once. Photos and scanned PDFs are read by OCR, and recordings transcribed (desktop), only after
+  you agree to a one-time model download; everything runs on the device.
+- Import a FHIR R4 or IPS file, a C-CDA document, or a SMART Health Link (with passcode). Every
+  record goes to a review list first, with ones you already have marked and unticked. One Undo
+  removes the whole import.
+
 ## [0.1.0]
 
 The first release (alpha). Installers for Windows, Linux and Android.
