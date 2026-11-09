@@ -24,7 +24,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2.8.0"
 tauri-plugin-opener = "2"
 ureq = { version = "3.5.0", default-features = false, features = ["rustls"] }
-sha2 = "0.10"
+sha2 = "0.11"
 # The doctor report PDF.
 typst-as-lib = "0.17.0"
 typst-pdf = "0.15.1"
