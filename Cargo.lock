@@ -5916,7 +5916,7 @@ dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
  "flate2",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "image",
  "jiff",
  "ocrs",
@@ -6560,7 +6560,7 @@ dependencies = [
 name = "tauri-plugin-swasthya-device"
 version = "0.1.0"
 dependencies = [
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "keyring-core",
  "serde",
  "serde_json",
