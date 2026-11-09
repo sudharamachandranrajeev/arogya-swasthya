@@ -11,7 +11,7 @@ argon2 = "0.5"
 base64 = "0.23"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
 flate2 = "1"
-getrandom = "0.3"
+getrandom = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "gif"] }
 jiff = { version = "0.2", features = ["serde"] }
 ocrs = "0.13"
