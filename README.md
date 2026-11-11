@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <a href="https://github.com/sudharamachandranrajeev/arogya-swasthya"><img src="docs/brand/icon.svg" alt="Arogya Swasthya" width="140"></a>
+  <a href="https://github.com/sudharamachandranrajeev/arogya-swasthya-personal-health"><img src="docs/brand/icon.svg" alt="Arogya Swasthya" width="140"></a>
   <br>
   Arogya Swasthya
   <br>
@@ -116,7 +116,7 @@ All screenshots use made-up demo data.
 ## 🚀 Get started
 
 Download from the
-[latest release](https://github.com/sudharamachandranrajeev/arogya-swasthya/releases/latest).
+[latest release](https://github.com/sudharamachandranrajeev/arogya-swasthya-personal-health/releases/latest).
 Pick the file for your device:
 
 | Device | File | How to install |
@@ -306,7 +306,7 @@ You need [mise](https://mise.jdx.dev) (it installs the pinned Rust, Java and git
 and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system.
 
 ```bash
-git clone https://github.com/sudharamachandranrajeev/arogya-swasthya
+git clone https://github.com/sudharamachandranrajeev/arogya-swasthya-personal-health
 cd arogya-swasthya
 mise install
 npm install

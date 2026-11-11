@@ -46,7 +46,7 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERDRUMzOUNFQTNDOTU3RUQKUldUdFY4bWp6am5zM0d3NkI2M2lyc0NHVFlzSlJJcWQ5OU45WHFTeFJjdUtyWWwvcEtJdGRtcHEK",
       "requireSignedVersion": true,
       "endpoints": [
-        "https://github.com/sudharamachandranrajeev/arogya-swasthya/releases/latest/download/latest.json"
+        "https://github.com/sudharamachandranrajeev/arogya-swasthya-personal-health/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

@@ -132,7 +132,7 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
         }
 
     // Updates come only from Arogya Swasthya's own GitHub releases, over HTTPS.
-    private val releases = "https://github.com/sudharamachandranrajeev/arogya-swasthya/releases/"
+    private val releases = "https://github.com/sudharamachandranrajeev/arogya-swasthya-personal-health/releases/"
 
     private fun get(url: String): HttpURLConnection {
         require(url.startsWith(releases)) { "not an Arogya Swasthya release address" }
